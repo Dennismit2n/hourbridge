@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Hourbridge schickt nichts nach draußen: keine Verbindungen, keine fremden Skripte, Schriften
+     oder Bilder. Alles Rechnen passiert im Browser mit der eingebauten Zeitzonen-Datenbank. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0E171F">
+<meta name="description" content="UTC in deutsche Zeit umrechnen und umgekehrt, mit beliebig vielen Orten, Zeitleiste, Zeitumstellungen und Kalender-Export. Ohne Cookies, ohne Werbung, ohne Tracking, offline nutzbar. / Convert UTC to Berlin time and back. No cookies, no ads, no tracking, works offline.">
+<meta name="application-name" content="Hourbridge">
+<meta name="apple-mobile-web-app-title" content="Hourbridge">
+<!-- Link-Vorschau. og:image muss absolut sein, Crawler lösen relative Pfade nicht auf. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dennismit2n.github.io/hourbridge/">
+<meta property="og:title" content="Hourbridge · UTC ↔ Berlin">
+<meta property="og:description" content="Convert UTC to German time and back, with any number of places, one timeline and daylight saving done right. No ads, no cookies, works offline after the first visit.">
+<meta property="og:image" content="https://dennismit2n.github.io/hourbridge/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Dark graphic: the Hourbridge clock icon and name, the line “14:00 UTC is 15:00 CET in Berlin”, below in German „UTC und deutsche Zeit, Zeitumstellungen inklusive.“ and „Free, no cookies, no ads, offline after the first visit“, at the bottom a 24-hour band from night to working hours.">
+<meta property="og:locale" content="en_GB">
+<meta property="og:locale:alternate" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>Hourbridge · UTC ↔ Berlin</title>
+<script>
+/* Vor dem ersten Bild: gemeinsame Darstellung der Werkstatt setzen (werkstatt.darstellung),
+   sonst blitzt kurz die falsche Farbe auf. Grundzustand ohne Wahl ist dunkel. */
+(function () {
+  var d = document.documentElement;
+  try {
+    var th = localStorage.getItem('werkstatt.darstellung');
+    var mm = window.matchMedia, ts = null, vs = null;
+    if (th === 'light' || th === 'dark') ts = th;
+    else if (th === 'hc-dark' || th === 'hc-light') { ts = th.slice(3); vs = 'contrast'; }
+    else if (th === 'cvd-dark' || th === 'cvd-light') { ts = th.slice(4); vs = 'cvd'; }
+    else if (th === 'invert') vs = 'invert';
+    else if (th && /dark/.test(th)) ts = 'dark';
+    else if (th && /light/.test(th)) ts = 'light';
+    else if (mm && mm('(prefers-contrast: more)').matches) { ts = mm('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; vs = 'contrast'; }
+    if (ts) d.setAttribute('data-theme', ts);
+    if (vs) d.setAttribute('data-vision', vs);
+  } catch (e) {}
+  /* beforeinstallprompt kann kommen, bevor das Skript am Seitenende läuft: hier aufheben. */
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.zuInstall = e;
+    if (window.zuInstallZeigen) window.zuInstallZeigen();
+  });
+})();
+</script>
+<style>
+/* Dunkel ist der Grundzustand. Hell nur über die Systemeinstellung (bei „System“) oder die Wahl „Hell“. */
+:root {
+  color-scheme: dark;
+  --bg: #0E171F; --panel: #131E28; --panel-2: #182633; --line: #2B3B4D; --line-2: #3A4E64;
+  --text: #B7B1D7; --head: #D8D1E2; --soft: #8C88AC;
+  --mauve: #B699C1; --mauve-bg: #2A2036; --green: #7EB39D; --green-bg: #15302A; --blue: #8CA7CE; --blue-bg: #17263A;
+  --warn: #D9B76E; --warn-bg: #30270F; --bad: #E39A9A;
+  --night: #0F1A2B; --night-t: #6F7FA0; --dawn: #262A47; --dawn-t: #A49FCB;
+  --day: #29405A; --day-t: #C9D6EA; --work: #2C5045; --work-t: #CBE7DA; --work-mark: #7EB39D;
+  --cursor: #E2C6EC; --focus: #B699C1;
+  --r: 14px;
+}
+/* Umkehr dreht die Farben um; der gedämpfte Text braucht dafür einen helleren Ausgangston,
+   sonst liegt er umgedreht unter 4,5:1. Der Hell-Block darunter gewinnt bei hellem System. */
+:root[data-vision="invert"] { --soft: #ABACD1; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #F1F0F6; --panel: #FFFFFF; --panel-2: #F6F5FA; --line: #D8D5E5; --line-2: #BDB8D2;
+    --text: #2E2B45; --head: #17152B; --soft: #5F5B7D;
+    --mauve: #6E4580; --mauve-bg: #F2EAF5; --green: #276149; --green-bg: #E3F2EB; --blue: #2F5287; --blue-bg: #E6EDF8;
+    --warn: #7A5600; --warn-bg: #FBF1D9; --bad: #9B2C2C;
+    --night: #2F3A57; --night-t: #D3DAEC; --dawn: #8B87B6; --dawn-t: #FFFFFF;
+    --day: #DCE6F2; --day-t: #24324A; --work: #CBE6D8; --work-t: #17402F; --work-mark: #276149;
+    --cursor: #6E4580; --focus: #6E4580;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F1F0F6; --panel: #FFFFFF; --panel-2: #F6F5FA; --line: #D8D5E5; --line-2: #BDB8D2;
+  --text: #2E2B45; --head: #17152B; --soft: #5F5B7D;
+  --mauve: #6E4580; --mauve-bg: #F2EAF5; --green: #276149; --green-bg: #E3F2EB; --blue: #2F5287; --blue-bg: #E6EDF8;
+  --warn: #7A5600; --warn-bg: #FBF1D9; --bad: #9B2C2C;
+  --night: #2F3A57; --night-t: #D3DAEC; --dawn: #8B87B6; --dawn-t: #FFFFFF;
+  --day: #DCE6F2; --day-t: #24324A; --work: #CBE6D8; --work-t: #17402F; --work-mark: #276149;
+  --cursor: #6E4580; --focus: #6E4580;
+}
+/* Sehhilfen der Werkstatt */
+:root[data-vision="contrast"]:not([data-theme="light"]) {
+  --bg: #000; --panel: #000; --panel-2: #0A0A0A; --line: #A0A0A0; --line-2: #C4C4C4;
+  --text: #E0E0E0; --head: #FFFFFF; --soft: #C4C4C4; --mauve: #E6C8F0; --green: #9CE0C0; --blue: #B5CCF2; --warn: #F2D27A;
+  --night: #000; --night-t: #C4C4C4; --dawn: #1E1E1E; --dawn-t: #E0E0E0; --day: #3A3A3A; --day-t: #FFFFFF;
+  --work: #0D3B2C; --work-t: #FFFFFF; --work-mark: #9CE0C0; --cursor: #FFFFFF; --focus: #FFFFFF;
+}
+:root[data-vision="contrast"][data-theme="light"] {
+  --bg: #FFF; --panel: #FFF; --panel-2: #FFF; --line: #585757; --line-2: #2B2B2B;
+  --text: #000; --head: #000; --soft: #2B2B2B; --mauve: #4A1D5C; --green: #0B4A30; --blue: #133C78; --warn: #5A3E00;
+  --night: #000; --night-t: #FFF; --dawn: #444; --dawn-t: #FFF; --day: #FFF; --day-t: #000;
+  --work: #DDF2E6; --work-t: #000; --work-mark: #0B4A30; --cursor: #000; --focus: #000;
+}
+:root[data-vision="contrast"] :is(.karte, .feld, .knopf, select, input) { border-width: 2px; }
+:root[data-vision="contrast"] :is(button, input, select, a, [tabindex]):focus-visible { outline-width: 3px; }
+:root[data-vision="cvd"]:not([data-theme="light"]) { --green: #56B4E9; --work-mark: #56B4E9; --work: #12324A; --warn: #F0E442; --bad: #E8743A; --mauve: #CC9EC2; }
+:root[data-vision="cvd"][data-theme="light"] { --green: #0067A2; --work-mark: #0067A2; --work: #D6E8F5; --warn: #956500; --bad: #974100; }
+:root[data-vision="invert"] { filter: invert(1); }
+@media print { :root[data-vision="invert"] { filter: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  min-height: 100vh;
+}
+a { color: var(--blue); }
+button, input, select { font: inherit; color: inherit; }
+:is(button, input, select, a, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.huelle { max-width: 1100px; margin: 0 auto; padding: 0 16px 48px; }
+.vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Kopf */
+header.kopf { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 18px 0 8px; }
+.marke { display: flex; align-items: center; gap: 10px; margin-right: auto; text-decoration: none; color: var(--head); }
+.marke svg { width: 34px; height: 34px; flex: none; }
+.marke b { font-size: 20px; letter-spacing: .01em; }
+.steuer { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+select, .knopf {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; min-height: 40px;
+}
+select { padding-right: 28px; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--soft) 50%), linear-gradient(135deg, var(--soft) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+.knopf { cursor: pointer; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.knopf:hover { border-color: var(--line-2); background: var(--panel-2); }
+.knopf.akzent { border-color: var(--mauve); color: var(--mauve); background: var(--mauve-bg); }
+.knopf[aria-pressed="true"] { border-color: var(--mauve); color: var(--head); background: var(--mauve-bg); }
+.knopf svg { width: 17px; height: 17px; flex: none; }
+
+/* Antwortzeile */
+.antwort { padding: 14px 0 6px; }
+.antwort h1 { margin: 0; font-size: clamp(15px, 2.2vw, 17px); font-weight: 600; color: var(--soft); letter-spacing: .02em; }
+.satz { margin: 4px 0 0; font-size: clamp(24px, 4.6vw, 40px); line-height: 1.2; color: var(--head); font-weight: 300; }
+.satz b { font-weight: 600; }
+.satz .zz { color: var(--mauve); font-weight: 500; }
+
+/* Leiste mit Datum und Jetzt */
+.leiste { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 12px; }
+.feld { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; min-height: 40px; }
+input[type="date"].feld { min-width: 150px; }
+.live-punkt { width: 9px; height: 9px; border-radius: 50%; background: var(--soft); flex: none; }
+.knopf[aria-pressed="true"] .live-punkt { background: var(--green); animation: puls 2s ease-in-out infinite; }
+@keyframes puls { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .knopf[aria-pressed="true"] .live-punkt { animation: none; } }
+.leiste .rechts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Brett mit Karten */
+.brett { display: grid; gap: 10px; }
+.karte {
+  display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr); gap: 6px 18px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px;
+}
+.karte.ref { border-color: var(--line-2); }
+.info { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: start; min-width: 0; }
+.ort { font-weight: 600; color: var(--head); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unter { font-size: 13px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; grid-column: 1 / -1; }
+.unter .kz { color: var(--mauve); font-weight: 600; }
+.unter .diff { color: var(--blue); }
+.werkzeug { display: flex; gap: 2px; }
+.mini { background: none; border: 1px solid transparent; border-radius: 8px; color: var(--soft); cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; }
+.mini:hover { color: var(--head); border-color: var(--line); background: var(--panel-2); }
+.mini svg { width: 16px; height: 16px; }
+.uhr { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 2px; margin-top: 2px; }
+.ort .du { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 45%, transparent); border-radius: 999px; padding: 1px 7px; vertical-align: 2px; }
+.knopf.zurueck { border-color: var(--mauve); color: var(--mauve); }
+.zeit {
+  width: 5.6ch; font-size: 34px; font-weight: 300; line-height: 1.1; color: var(--head); letter-spacing: .01em;
+  background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 0 4px; margin-left: -5px;
+}
+.zeit.h12 { width: 7.4ch; }
+.zeit:hover { border-color: var(--line); }
+.zeit:focus { border-color: var(--mauve); background: var(--panel-2); outline: none; }
+.sek { font-size: 15px; color: var(--soft); width: 2.4ch; }
+.datum { font-size: 14px; color: var(--text); margin-left: auto; white-space: nowrap; }
+.datum.anders { color: var(--warn); }
+
+/* Zeitleiste */
+.leiste-z { position: relative; min-width: 0; }
+.stunden { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 44px; border-radius: 10px; overflow: hidden; cursor: pointer; touch-action: pan-y; user-select: none; }
+.std { position: relative; display: grid; place-items: center; font-size: 12px; line-height: 1; border-right: 1px solid color-mix(in srgb, var(--bg) 35%, transparent); }
+.std:last-child { border-right: 0; }
+.std.n { background: var(--night); color: var(--night-t); }
+.std.d { background: var(--dawn); color: var(--dawn-t); }
+.std.t { background: var(--day); color: var(--day-t); }
+.std.w { background: var(--work); color: var(--work-t); box-shadow: inset 0 -3px 0 var(--work-mark); }
+.std.neu::before { content: attr(data-tag); position: absolute; top: 3px; left: 4px; font-size: 8.5px; font-weight: 700; letter-spacing: .03em; line-height: 1; color: var(--mauve); white-space: nowrap; }
+.std.neu.ende::before { left: auto; right: 3px; }
+.std.neu { box-shadow: inset 2px 0 0 var(--mauve); }
+.std.neu span { padding-top: 12px; }
+.std.w.neu { box-shadow: inset 2px 0 0 var(--mauve), inset 0 -3px 0 var(--work-mark); }
+.std small { font-size: 8px; vertical-align: super; margin-left: 1px; }
+.zeiger { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--cursor); border-radius: 2px; pointer-events: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg) 60%, transparent); }
+
+.regler-zeile { display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr); gap: 18px; padding: 4px 15px 0; align-items: center; }
+.regler-zeile .hinweis { font-size: 13px; color: var(--soft); }
+input[type="range"] { width: 100%; accent-color: var(--mauve); height: 28px; margin: 0; background: transparent; }
+
+/* Suchfeld */
+.suche { position: relative; margin-top: 14px; }
+.suche input { width: 100%; padding: 12px 14px 12px 42px; font-size: 16px; background: var(--panel); border: 1px dashed var(--line-2); border-radius: var(--r); }
+.suche input:focus { border-style: solid; border-color: var(--mauve); outline: none; }
+.suche > svg { position: absolute; left: 14px; top: 14px; width: 18px; height: 18px; color: var(--soft); pointer-events: none; }
+.vorschlaege { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.35); max-height: 320px; overflow: auto; }
+.vorschlaege li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.vorschlaege li[aria-selected="true"], .vorschlaege li:hover { background: var(--mauve-bg); }
+.vorschlaege .n1 { color: var(--head); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vorschlaege .n2 { font-size: 13px; color: var(--soft); }
+.vorschlaege .z { text-align: right; color: var(--text); }
+
+.meldung { min-height: 1.5em; margin: 8px 2px 0; font-size: 14px; color: var(--warn); }
+.meldung button { margin-left: 8px; }
+
+/* Aktionen */
+.aktionen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.merken { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-size: 14px; color: var(--soft); cursor: pointer; min-height: 40px; }
+.merken input { width: 18px; height: 18px; accent-color: var(--mauve); margin: 0; }
+@media (max-width: 760px) { .merken { margin-left: 0; } }
+
+/* Tafeln unten */
+.tafeln { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 26px; }
+.tafel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; min-width: 0; }
+.tafel h2 { margin: 0 0 10px; font-size: 16px; color: var(--head); display: flex; align-items: center; gap: 8px; }
+.tafel h2 svg { width: 18px; height: 18px; color: var(--mauve); }
+.tafel p { margin: 6px 0; }
+.umst { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.umst li { border-left: 3px solid var(--blue); padding: 2px 0 2px 10px; }
+.umst li.keine { border-left-color: var(--line-2); color: var(--soft); }
+.umst .wann { color: var(--head); }
+.umst .klein { font-size: 13px; color: var(--soft); }
+.achtung { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); font-size: 14px; border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+.achtung + .achtung { margin-top: 8px; }
+.fakten { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 15px; }
+.fakten dt { color: var(--soft); }
+.fakten dd { margin: 0; color: var(--text); }
+
+details.spick { margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+details.spick summary { cursor: pointer; padding: 14px 18px; color: var(--head); font-weight: 600; list-style-position: inside; }
+.tabelle-huelle { overflow-x: auto; padding: 0 12px 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--soft); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--panel-2); }
+tbody tr.akt { background: var(--mauve-bg); color: var(--head); }
+td .tag { font-size: 11px; color: var(--warn); margin-left: 4px; }
+
+footer { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--soft); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+footer .gut { color: var(--green); }
+
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px); opacity: 0; background: var(--panel-2); color: var(--head); border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 16px; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 20; max-width: calc(100% - 32px); }
+.toast.an { opacity: 1; transform: translateX(-50%); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+@media (max-width: 760px) {
+  .karte { grid-template-columns: minmax(0, 1fr); }
+  /* Am Telefon bleibt der Regler unten am Rand stehen, auch wenn viele Orte darüber liegen. */
+  .regler-zeile { grid-template-columns: minmax(0, 1fr); gap: 2px; position: sticky; bottom: 0; z-index: 4; margin: 0 -16px; padding: 8px 31px calc(8px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--bg) 92%, transparent); border-top: 1px solid var(--line); backdrop-filter: blur(6px); }
+  .regler-zeile .hinweis { order: 2; }
+  .tafeln { grid-template-columns: minmax(0, 1fr); }
+  .stunden { height: 40px; }
+  .std { font-size: 10px; }
+  .std.ungerade span { visibility: hidden; }
+  .leiste .rechts { margin-left: 0; }
+  .zeit { font-size: 30px; }
+}
+@media (max-width: 420px) {
+  header.kopf .steuer { width: 100%; }
+  header.kopf .steuer select { flex: 1 1 0; min-width: 0; }
+  #installieren { width: 100%; justify-content: center; }
+}
+</style>
+</head>
+<body>
+<div class="huelle">
+  <header class="kopf">
+    <a class="marke" href="./" aria-label="Hourbridge">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#131E28"/><path d="M32 12a20 20 0 0 0 0 40Z" fill="#29405A"/><path d="M32 12a20 20 0 0 1 0 40Z" fill="#0F1A2B"/><circle cx="32" cy="32" r="20" fill="none" stroke="#B699C1" stroke-width="3"/><path d="M32 20v12l8 5" fill="none" stroke="#D8D1E2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="32" r="2.6" fill="#D8D1E2"/></svg>
+      <b>Hourbridge</b>
+    </a>
+    <div class="steuer">
+      <button id="installieren" class="knopf akzent" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+        <span data-i="install">Installieren</span>
+      </button>
+      <label class="vh" for="sprache" data-i="sprache">Sprache</label>
+      <select id="sprache">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+        <option value="it">Italiano</option>
+        <option value="nl">Nederlands</option>
+        <option value="pl">Polski</option>
+        <option value="pt">Português (Brasil)</option>
+        <option value="tr">Türkçe</option>
+        <option value="ru">Русский</option>
+        <option value="hi">हिन्दी</option>
+        <option value="zh">中文（简体）</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+      </select>
+      <label class="vh" for="darstellung" data-i="darst">Darstellung</label>
+      <select id="darstellung"></select>
+    </div>
+  </header>
+
+  <main>
+    <section class="antwort" aria-labelledby="titel">
+      <h1 id="titel"></h1>
+      <p class="satz" id="satz" aria-live="polite"></p>
+    </section>
+
+    <div class="leiste">
+      <button id="jetzt" class="knopf" type="button" aria-pressed="true"><span class="live-punkt" aria-hidden="true"></span><span data-i="jetzt">Jetzt</span></button>
+      <label class="vh" for="datum" data-i="datum">Datum</label>
+      <input id="datum" class="feld" type="date">
+      <div class="rechts">
+        <button id="tauschen" class="knopf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg>
+          <span data-i="tauschen">Tauschen</span>
+        </button>
+        <button id="format" class="knopf" type="button" aria-pressed="false"><span id="format-t">24 h</span></button>
+      </div>
+    </div>
+
+    <div class="brett" id="brett"></div>
+    <div class="regler-zeile">
+      <span class="hinweis" data-i="regler">Ziehen, klicken oder Pfeiltasten</span>
+      <span><label class="vh" for="regler" id="regler-l" data-i="reglerL">Uhrzeit verschieben</label><input id="regler" type="range" min="0" max="1439" step="15"></span>
+    </div>
+
+    <div class="suche" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <label class="vh" for="suchfeld" data-i="sucheL">Ort hinzufügen oder Uhrzeit eingeben</label>
+      <input id="suchfeld" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="vorschlaege">
+      <ul id="vorschlaege" class="vorschlaege" role="listbox" hidden></ul>
+    </div>
+    <p class="meldung" id="meldung" role="status"></p>
+
+    <div class="aktionen">
+      <button id="link" class="knopf" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span data-i="link">Link kopieren</span></button>
+      <button id="text" class="knopf" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span data-i="text">Zeiten kopieren</span></button>
+      <button id="ics" class="knopf" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span data-i="ics">In den Kalender</span></button>
+      <button id="meine" class="knopf" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span data-i="meine">Meine Zeitzone</span></button>
+      <label class="merken"><input id="merken" type="checkbox"><span data-i="merken">Orte auf diesem Gerät merken</span></label>
+    </div>
+
+    <div class="tafeln">
+      <section class="tafel" aria-labelledby="umst-h">
+        <h2 id="umst-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span data-i="umstH">Nächste Zeitumstellungen</span></h2>
+        <ul class="umst" id="umst"></ul>
+        <div id="achtungen"></div>
+      </section>
+      <section class="tafel" aria-labelledby="fakt-h">
+        <h2 id="fakt-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span data-i="faktH">Gut zu wissen</span></h2>
+        <dl class="fakten" id="fakten"></dl>
+      </section>
+    </div>
+
+    <details class="spick" id="spick">
+      <summary data-i="spickH">Alle Stunden des Tages als Tabelle</summary>
+      <div class="tabelle-huelle"><table id="tabelle"></table></div>
+    </details>
+  </main>
+
+  <footer>
+    <span class="gut" data-i="frei">Keine Cookies, kein Tracking, keine Werbung.</span>
+    <span data-i="offline">Läuft nach dem ersten Besuch auch offline.</span>
+    <span data-i="tz">Zeitzonendaten: aus deinem Browser (IANA).</span>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ===================== Texte ===================== */
+const T = {
+  de: {
+    install: 'Installieren', installDone: 'Als App installiert.', sprache: 'Sprache', darst: 'Darstellung',
+    darstOpt: ['System', 'Hell', 'Dunkel', 'Hoher Kontrast dunkel', 'Hoher Kontrast hell', 'Farbenblind dunkel', 'Farbenblind hell', 'Umgekehrte Farben'],
+    jetzt: 'Jetzt', datum: 'Datum', tauschen: 'Tauschen', regler: 'Ziehen, klicken oder Pfeiltasten', reglerL: 'Uhrzeit verschieben',
+    sucheL: 'Ort hinzufügen oder Uhrzeit eingeben', sucheP: 'Ort hinzufügen oder Zeit eingeben, z. B. „Tokio“ oder „9am New York“',
+    link: 'Link kopieren', text: 'Zeiten kopieren', ics: 'In den Kalender', merken: 'Orte auf diesem Gerät merken',
+    gemerkt: 'Deine Orte bleiben auf diesem Gerät gespeichert.', vergessen: 'Gespeicherte Orte gelöscht.',
+    umstH: 'Nächste Zeitumstellungen', faktH: 'Gut zu wissen', spickH: 'Alle Stunden des Tages als Tabelle',
+    frei: 'Keine Cookies, kein Tracking, keine Werbung.', offline: 'Läuft nach dem ersten Besuch auch offline.', tz: 'Zeitzonendaten: aus deinem Browser (IANA).',
+    ist: 'ist', in: 'in', gleich: 'gleiche Zeit', std: 'Std.', titelZwei: (a, b) => `${a} in ${b} umrechnen`, titelEins: a => `Uhrzeit in ${a}`,
+    zeitIn: o => `Uhrzeit in ${o}`, nachOben: 'Als Bezug nach oben', entfernen: 'Entfernen', bezug: 'Bezug',
+    keineUmst: o => `${o}: keine Zeitumstellung`, vor: 'Uhr wird vorgestellt', zurueck: 'Uhr wird zurückgestellt', inTagen: n => n === 0 ? 'heute' : n === 1 ? 'morgen' : `in ${n} Tagen`,
+    abstand: (a, b, von, bis, alt, neu) => `Achtung: Vom ${von} bis ${bis} liegen ${a} und ${b} ${neu} auseinander statt wie sonst ${alt}, weil dort an verschiedenen Tagen umgestellt wird.`,
+    luecke: (z, o, n) => `${z} gibt es in ${o} an diesem Tag nicht, die Uhr springt vor. Gezeigt ist ${n}.`,
+    doppelt: (z, o) => `${z} gibt es in ${o} an diesem Tag zweimal.`, zweite: 'Zweites Mal zeigen', erste: 'Erstes Mal zeigen',
+    kopiert: 'Kopiert.', kopierFehler: 'Kopieren ging nicht. Bitte von Hand markieren.', kalender: 'Kalenderdatei erstellt.',
+    nichtGefunden: 'Diesen Ort kenne ich nicht.', schonDa: 'Der Ort ist schon da.', hinzu: o => `${o} hinzugefügt.`,
+    termin: 'Termin', utcName: 'Koordinierte Weltzeit', h24: '24 h', h12: '12 h', neuerTag: 'Neuer Tag',
+    meine: 'Meine Zeitzone', deine: 'deine Zone', tagK: 'T', teilM: '[zeit] [kz] in [ort]', satzM: '[A] ist [B]',
+    fakten: [
+      ['UTC', 'Koordinierte Weltzeit, die Bezugszeit der Welt. Sie kennt keine Sommerzeit.'],
+      ['Winter', 'Deutschland nutzt MEZ = UTC+1 (Ende Oktober bis Ende März).'],
+      ['Sommer', 'Deutschland nutzt MESZ = UTC+2 (Ende März bis Ende Oktober).'],
+      ['Wechsel', 'Am letzten Sonntag im März und im Oktober, jeweils um 01:00 UTC.'],
+      ['Merksatz', 'UTC + 1 im Winter, UTC + 2 im Sommer.'],
+      ['Zeitleiste', 'Grün unterstrichen: übliche Arbeitszeit 9 bis 17 Uhr. Dunkel: Nacht.']
+    ],
+    tabKopf: 'Stunde'
+  },
+  en: {
+    install: 'Install', installDone: 'Installed as an app.', sprache: 'Language', darst: 'Appearance',
+    darstOpt: ['System', 'Light', 'Dark', 'High contrast dark', 'High contrast light', 'Colour-blind dark', 'Colour-blind light', 'Inverted colours'],
+    jetzt: 'Now', datum: 'Date', tauschen: 'Swap', regler: 'Drag, click or use arrow keys', reglerL: 'Move the time',
+    sucheL: 'Add a place or type a time', sucheP: 'Add a place or type a time, e.g. “Tokyo” or “9am New York”',
+    link: 'Copy link', text: 'Copy times', ics: 'Add to calendar', merken: 'Remember places on this device',
+    gemerkt: 'Your places stay saved on this device.', vergessen: 'Saved places deleted.',
+    umstH: 'Next clock changes', faktH: 'Good to know', spickH: 'Every hour of the day as a table',
+    frei: 'No cookies, no tracking, no ads.', offline: 'Works offline after the first visit.', tz: 'Time zone data: from your browser (IANA).',
+    ist: 'is', in: 'in', gleich: 'same time', std: 'h', titelZwei: (a, b) => `Convert ${a} to ${b}`, titelEins: a => `Time in ${a}`,
+    zeitIn: o => `Time in ${o}`, nachOben: 'Move to top as reference', entfernen: 'Remove', bezug: 'Reference',
+    keineUmst: o => `${o}: no clock changes`, vor: 'clocks go forward', zurueck: 'clocks go back', inTagen: n => n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`,
+    abstand: (a, b, von, bis, alt, neu) => `Heads-up: from ${von} to ${bis}, ${a} and ${b} are ${neu} apart instead of the usual ${alt}, because their clocks change on different days.`,
+    luecke: (z, o, n) => `${z} does not exist in ${o} on this day, clocks jump forward. Showing ${n}.`,
+    doppelt: (z, o) => `${z} happens twice in ${o} on this day.`, zweite: 'Show the second one', erste: 'Show the first one',
+    kopiert: 'Copied.', kopierFehler: 'Copying failed. Please select it by hand.', kalender: 'Calendar file created.',
+    nichtGefunden: 'I don’t know this place.', schonDa: 'That place is already there.', hinzu: o => `${o} added.`,
+    termin: 'Meeting', utcName: 'Coordinated Universal Time', h24: '24 h', h12: '12 h', neuerTag: 'New day',
+    meine: 'My time zone', deine: 'your zone', tagK: 'd', teilM: '[zeit] [kz] in [ort]', satzM: '[A] is [B]',
+    fakten: [
+      ['UTC', 'Coordinated Universal Time, the world’s reference time. It has no daylight saving.'],
+      ['Winter', 'Germany uses CET = UTC+1 (late October to late March).'],
+      ['Summer', 'Germany uses CEST = UTC+2 (late March to late October).'],
+      ['Switch', 'On the last Sunday of March and of October, at 01:00 UTC.'],
+      ['Rule of thumb', 'UTC + 1 in winter, UTC + 2 in summer.'],
+      ['Timeline', 'Green underline: usual working hours 9 to 5. Dark: night.']
+    ],
+    tabKopf: 'Hour'
+  },
+  es: {
+    install: 'Instalar', installDone: 'Instalada como app.', sprache: 'Idioma', darst: 'Apariencia',
+    darstOpt: ['Sistema', 'Claro', 'Oscuro', 'Alto contraste oscuro', 'Alto contraste claro', 'Daltónico oscuro', 'Daltónico claro', 'Colores invertidos'],
+    jetzt: 'Ahora', datum: 'Fecha', tauschen: 'Invertir', regler: 'Arrastra, haz clic o usa las flechas', reglerL: 'Mover la hora',
+    sucheL: 'Añadir un lugar o escribir una hora', sucheP: 'Añade un lugar o escribe una hora, p. ej. «Tokio» o «9am Nueva York»',
+    link: 'Copiar enlace', text: 'Copiar horas', ics: 'Añadir al calendario', merken: 'Recordar lugares en este dispositivo',
+    gemerkt: 'Tus lugares quedan guardados en este dispositivo.', vergessen: 'Lugares guardados borrados.',
+    umstH: 'Próximos cambios de hora', faktH: 'Bueno saberlo', spickH: 'Todas las horas del día en una tabla',
+    frei: 'Sin cookies, sin rastreo, sin anuncios.', offline: 'Funciona sin conexión tras la primera visita.', tz: 'Datos de zonas horarias: de tu navegador (IANA).',
+    gleich: 'misma hora', std: 'h', titelZwei: (a, b) => `Convertir ${a} a ${b}`, titelEins: a => `Hora en ${a}`,
+    zeitIn: o => `Hora en ${o}`, nachOben: 'Subir como referencia', entfernen: 'Quitar',
+    keineUmst: o => `${o}: sin cambio de hora`, vor: 'se adelanta el reloj', zurueck: 'se atrasa el reloj', inTagen: n => n === 0 ? 'hoy' : n === 1 ? 'mañana' : `en ${n} días`,
+    abstand: (a, b, von, bis, alt, neu) => `Atención: del ${von} al ${bis}, entre ${a} y ${b} hay ${neu} de diferencia en lugar de ${alt}, porque cambian la hora en días distintos.`,
+    luecke: (z, o, n) => `${z} no existe en ${o} ese día, el reloj se adelanta. Se muestra ${n}.`,
+    doppelt: (z, o) => `${z} ocurre dos veces en ${o} ese día.`, zweite: 'Mostrar la segunda', erste: 'Mostrar la primera',
+    kopiert: 'Copiado.', kopierFehler: 'No se pudo copiar. Selecciónalo a mano.', kalender: 'Archivo de calendario creado.',
+    nichtGefunden: 'No conozco ese lugar.', schonDa: 'Ese lugar ya está.', hinzu: o => `${o} añadido.`,
+    termin: 'Reunión', utcName: 'Tiempo universal coordinado', h24: '24 h', h12: '12 h', neuerTag: 'Nuevo día',
+    meine: 'Mi zona horaria', deine: 'tu zona', tagK: 'd', teilM: '[zeit] [kz] en [ort]', satzM: '[A] equivale a [B]',
+    fakten: [
+      ['UTC', 'Tiempo universal coordinado, la hora de referencia mundial. No tiene horario de verano.'],
+      ['Invierno', 'Alemania usa CET = UTC+1 (de finales de octubre a finales de marzo).'],
+      ['Verano', 'Alemania usa CEST = UTC+2 (de finales de marzo a finales de octubre).'],
+      ['Cambio', 'El último domingo de marzo y de octubre, a las 01:00 UTC.'],
+      ['Regla', 'UTC + 1 en invierno, UTC + 2 en verano.'],
+      ['Línea de tiempo', 'Subrayado verde: horario laboral habitual de 9 a 17. Oscuro: noche.']
+    ]
+  },
+  fr: {
+    install: 'Installer', installDone: 'Installée comme application.', sprache: 'Langue', darst: 'Apparence',
+    darstOpt: ['Système', 'Clair', 'Sombre', 'Contraste élevé sombre', 'Contraste élevé clair', 'Daltonien sombre', 'Daltonien clair', 'Couleurs inversées'],
+    jetzt: 'Maintenant', datum: 'Date', tauschen: 'Inverser', regler: 'Glisse, clique ou utilise les flèches', reglerL: 'Déplacer l’heure',
+    sucheL: 'Ajouter un lieu ou saisir une heure', sucheP: 'Ajoute un lieu ou saisis une heure, p. ex. « Tokyo » ou « 9am New York »',
+    link: 'Copier le lien', text: 'Copier les heures', ics: 'Ajouter au calendrier', merken: 'Retenir les lieux sur cet appareil',
+    gemerkt: 'Tes lieux restent enregistrés sur cet appareil.', vergessen: 'Lieux enregistrés supprimés.',
+    umstH: 'Prochains changements d’heure', faktH: 'Bon à savoir', spickH: 'Toutes les heures de la journée en tableau',
+    frei: 'Pas de cookies, pas de pistage, pas de publicité.', offline: 'Fonctionne hors ligne après la première visite.', tz: 'Données de fuseaux : celles de ton navigateur (IANA).',
+    gleich: 'même heure', std: 'h', titelZwei: (a, b) => `Convertir ${a} en ${b}`, titelEins: a => `Heure : ${a}`,
+    zeitIn: o => `Heure à ${o}`, nachOben: 'Mettre en haut comme référence', entfernen: 'Retirer',
+    keineUmst: o => `${o} : pas de changement d’heure`, vor: 'on avance l’horloge', zurueck: 'on recule l’horloge', inTagen: n => n === 0 ? 'aujourd’hui' : n === 1 ? 'demain' : `dans ${n} jours`,
+    abstand: (a, b, von, bis, alt, neu) => `Attention : du ${von} au ${bis}, ${a} et ${b} ont ${neu} d’écart au lieu de ${alt}, car l’heure y change à des dates différentes.`,
+    luecke: (z, o, n) => `${z} n’existe pas à ${o} ce jour-là, l’horloge avance. Affiché : ${n}.`,
+    doppelt: (z, o) => `${z} a lieu deux fois à ${o} ce jour-là.`, zweite: 'Afficher la seconde', erste: 'Afficher la première',
+    kopiert: 'Copié.', kopierFehler: 'Copie impossible. Sélectionne le texte à la main.', kalender: 'Fichier calendrier créé.',
+    nichtGefunden: 'Je ne connais pas ce lieu.', schonDa: 'Ce lieu est déjà là.', hinzu: o => `${o} ajouté.`,
+    termin: 'Rendez-vous', utcName: 'Temps universel coordonné', h24: '24 h', h12: '12 h', neuerTag: 'Nouveau jour',
+    meine: 'Mon fuseau', deine: 'ton fuseau', tagK: 'j', teilM: '[zeit] [kz] à [ort]', satzM: '[A] correspond à [B]',
+    fakten: [
+      ['UTC', 'Temps universel coordonné, l’heure de référence mondiale. Pas d’heure d’été.'],
+      ['Hiver', 'L’Allemagne utilise CET = UTC+1 (fin octobre à fin mars).'],
+      ['Été', 'L’Allemagne utilise CEST = UTC+2 (fin mars à fin octobre).'],
+      ['Changement', 'Le dernier dimanche de mars et d’octobre, à 01:00 UTC.'],
+      ['Astuce', 'UTC + 1 en hiver, UTC + 2 en été.'],
+      ['Frise', 'Souligné vert : heures de travail habituelles de 9 h à 17 h. Sombre : nuit.']
+    ]
+  },
+  it: {
+    install: 'Installa', installDone: 'Installata come app.', sprache: 'Lingua', darst: 'Aspetto',
+    darstOpt: ['Sistema', 'Chiaro', 'Scuro', 'Contrasto elevato scuro', 'Contrasto elevato chiaro', 'Daltonico scuro', 'Daltonico chiaro', 'Colori invertiti'],
+    jetzt: 'Adesso', datum: 'Data', tauschen: 'Inverti', regler: 'Trascina, clicca o usa le frecce', reglerL: 'Sposta l’ora',
+    sucheL: 'Aggiungi un luogo o scrivi un’ora', sucheP: 'Aggiungi un luogo o scrivi un’ora, ad es. «Tokyo» o «9am New York»',
+    link: 'Copia link', text: 'Copia orari', ics: 'Aggiungi al calendario', merken: 'Ricorda i luoghi su questo dispositivo',
+    gemerkt: 'I tuoi luoghi restano salvati su questo dispositivo.', vergessen: 'Luoghi salvati eliminati.',
+    umstH: 'Prossimi cambi d’ora', faktH: 'Buono a sapersi', spickH: 'Tutte le ore del giorno in tabella',
+    frei: 'Niente cookie, niente tracciamento, niente pubblicità.', offline: 'Funziona offline dopo la prima visita.', tz: 'Dati dei fusi orari: dal tuo browser (IANA).',
+    gleich: 'stessa ora', std: 'h', titelZwei: (a, b) => `Converti ${a} in ${b}`, titelEins: a => `Ora: ${a}`,
+    zeitIn: o => `Ora a ${o}`, nachOben: 'Porta in alto come riferimento', entfernen: 'Rimuovi',
+    keineUmst: o => `${o}: nessun cambio d’ora`, vor: 'l’orologio va avanti', zurueck: 'l’orologio va indietro', inTagen: n => n === 0 ? 'oggi' : n === 1 ? 'domani' : `tra ${n} giorni`,
+    abstand: (a, b, von, bis, alt, neu) => `Attenzione: dal ${von} al ${bis} tra ${a} e ${b} ci sono ${neu} di differenza invece di ${alt}, perché l’ora cambia in giorni diversi.`,
+    luecke: (z, o, n) => `${z} non esiste a ${o} quel giorno, l’orologio va avanti. Mostrato: ${n}.`,
+    doppelt: (z, o) => `${z} capita due volte a ${o} quel giorno.`, zweite: 'Mostra la seconda', erste: 'Mostra la prima',
+    kopiert: 'Copiato.', kopierFehler: 'Copia non riuscita. Selezionalo a mano.', kalender: 'File del calendario creato.',
+    nichtGefunden: 'Non conosco questo luogo.', schonDa: 'Il luogo c’è già.', hinzu: o => `${o} aggiunto.`,
+    termin: 'Appuntamento', utcName: 'Tempo coordinato universale', h24: '24 h', h12: '12 h', neuerTag: 'Nuovo giorno',
+    meine: 'Il mio fuso', deine: 'il tuo fuso', tagK: 'g', teilM: '[zeit] [kz] a [ort]', satzM: '[A] corrisponde a [B]',
+    fakten: [
+      ['UTC', 'Tempo coordinato universale, l’ora di riferimento mondiale. Non ha ora legale.'],
+      ['Inverno', 'La Germania usa CET = UTC+1 (da fine ottobre a fine marzo).'],
+      ['Estate', 'La Germania usa CEST = UTC+2 (da fine marzo a fine ottobre).'],
+      ['Cambio', 'L’ultima domenica di marzo e di ottobre, alle 01:00 UTC.'],
+      ['Regola', 'UTC + 1 d’inverno, UTC + 2 d’estate.'],
+      ['Linea del tempo', 'Sottolineato verde: orario di lavoro abituale dalle 9 alle 17. Scuro: notte.']
+    ]
+  },
+  nl: {
+    install: 'Installeren', installDone: 'Als app geïnstalleerd.', sprache: 'Taal', darst: 'Weergave',
+    darstOpt: ['Systeem', 'Licht', 'Donker', 'Hoog contrast donker', 'Hoog contrast licht', 'Kleurenblind donker', 'Kleurenblind licht', 'Omgekeerde kleuren'],
+    jetzt: 'Nu', datum: 'Datum', tauschen: 'Omwisselen', regler: 'Sleep, klik of gebruik de pijltjestoetsen', reglerL: 'Tijd verschuiven',
+    sucheL: 'Plaats toevoegen of tijd typen', sucheP: 'Voeg een plaats toe of typ een tijd, bijv. „Tokio” of „9am New York”',
+    link: 'Link kopiëren', text: 'Tijden kopiëren', ics: 'Aan agenda toevoegen', merken: 'Plaatsen op dit apparaat onthouden',
+    gemerkt: 'Je plaatsen blijven op dit apparaat bewaard.', vergessen: 'Bewaarde plaatsen gewist.',
+    umstH: 'Volgende klokwisselingen', faktH: 'Goed om te weten', spickH: 'Alle uren van de dag als tabel',
+    frei: 'Geen cookies, geen tracking, geen reclame.', offline: 'Werkt na het eerste bezoek ook offline.', tz: 'Tijdzonegegevens: uit je browser (IANA).',
+    gleich: 'zelfde tijd', std: 'u', titelZwei: (a, b) => `${a} omrekenen naar ${b}`, titelEins: a => `Tijd in ${a}`,
+    zeitIn: o => `Tijd in ${o}`, nachOben: 'Als referentie naar boven', entfernen: 'Verwijderen',
+    keineUmst: o => `${o}: geen klokwisseling`, vor: 'klok gaat vooruit', zurueck: 'klok gaat achteruit', inTagen: n => n === 0 ? 'vandaag' : n === 1 ? 'morgen' : `over ${n} dagen`,
+    abstand: (a, b, von, bis, alt, neu) => `Let op: van ${von} tot ${bis} liggen ${a} en ${b} ${neu} uit elkaar in plaats van ${alt}, omdat de klok daar op verschillende dagen verzet wordt.`,
+    luecke: (z, o, n) => `${z} bestaat in ${o} op deze dag niet, de klok springt vooruit. Getoond: ${n}.`,
+    doppelt: (z, o) => `${z} komt in ${o} op deze dag twee keer voor.`, zweite: 'Tweede keer tonen', erste: 'Eerste keer tonen',
+    kopiert: 'Gekopieerd.', kopierFehler: 'Kopiëren lukte niet. Selecteer het met de hand.', kalender: 'Agendabestand gemaakt.',
+    nichtGefunden: 'Deze plaats ken ik niet.', schonDa: 'Deze plaats staat er al.', hinzu: o => `${o} toegevoegd.`,
+    termin: 'Afspraak', utcName: 'Gecoördineerde wereldtijd', h24: '24 h', h12: '12 h', neuerTag: 'Nieuwe dag',
+    meine: 'Mijn tijdzone', deine: 'jouw zone', tagK: 'd', teilM: '[zeit] [kz] in [ort]', satzM: '[A] is [B]',
+    fakten: [
+      ['UTC', 'Gecoördineerde wereldtijd, de referentietijd van de wereld. Kent geen zomertijd.'],
+      ['Winter', 'Duitsland gebruikt CET = UTC+1 (eind oktober tot eind maart).'],
+      ['Zomer', 'Duitsland gebruikt CEST = UTC+2 (eind maart tot eind oktober).'],
+      ['Wissel', 'Op de laatste zondag van maart en oktober, om 01:00 UTC.'],
+      ['Ezelsbruggetje', 'UTC + 1 in de winter, UTC + 2 in de zomer.'],
+      ['Tijdlijn', 'Groen onderstreept: gebruikelijke werktijd van 9 tot 17 uur. Donker: nacht.']
+    ]
+  },
+  pl: {
+    install: 'Zainstaluj', installDone: 'Zainstalowano jako aplikację.', sprache: 'Język', darst: 'Wygląd',
+    darstOpt: ['Systemowy', 'Jasny', 'Ciemny', 'Wysoki kontrast, ciemny', 'Wysoki kontrast, jasny', 'Dla daltonistów, ciemny', 'Dla daltonistów, jasny', 'Odwrócone kolory'],
+    jetzt: 'Teraz', datum: 'Data', tauschen: 'Zamień', regler: 'Przeciągnij, kliknij lub użyj strzałek', reglerL: 'Przesuń godzinę',
+    sucheL: 'Dodaj miejsce lub wpisz godzinę', sucheP: 'Dodaj miejsce lub wpisz godzinę, np. „Tokio” albo „9am New York”',
+    link: 'Kopiuj link', text: 'Kopiuj godziny', ics: 'Dodaj do kalendarza', merken: 'Zapamiętaj miejsca na tym urządzeniu',
+    gemerkt: 'Twoje miejsca zostaną zapisane na tym urządzeniu.', vergessen: 'Zapisane miejsca usunięte.',
+    umstH: 'Najbliższe zmiany czasu', faktH: 'Warto wiedzieć', spickH: 'Wszystkie godziny dnia w tabeli',
+    frei: 'Bez cookies, bez śledzenia, bez reklam.', offline: 'Po pierwszej wizycie działa też offline.', tz: 'Dane stref czasowych: z Twojej przeglądarki (IANA).',
+    gleich: 'ta sama godzina', std: 'godz.', titelZwei: (a, b) => `Przelicz: ${a} → ${b}`, titelEins: a => `Godzina: ${a}`,
+    zeitIn: o => `Godzina: ${o}`, nachOben: 'Przenieś na górę jako punkt odniesienia', entfernen: 'Usuń',
+    keineUmst: o => `${o}: bez zmiany czasu`, vor: 'zegar przesuwa się do przodu', zurueck: 'zegar cofa się', inTagen: n => n === 0 ? 'dziś' : n === 1 ? 'jutro' : `za ${n} dni`,
+    abstand: (a, b, von, bis, alt, neu) => `Uwaga: od ${von} do ${bis} różnica czasu ${a} ↔ ${b} wynosi ${neu} zamiast ${alt}, bo zegary zmienia się tam w różne dni.`,
+    luecke: (z, o, n) => `Godziny ${z} nie ma tego dnia (${o}), zegar przeskakuje do przodu. Pokazano ${n}.`,
+    doppelt: (z, o) => `Godzina ${z} występuje tego dnia dwa razy (${o}).`, zweite: 'Pokaż drugą', erste: 'Pokaż pierwszą',
+    kopiert: 'Skopiowano.', kopierFehler: 'Nie udało się skopiować. Zaznacz ręcznie.', kalender: 'Utworzono plik kalendarza.',
+    nichtGefunden: 'Nie znam tego miejsca.', schonDa: 'To miejsce już jest.', hinzu: o => `Dodano: ${o}.`,
+    termin: 'Spotkanie', utcName: 'Uniwersalny czas koordynowany', h24: '24 h', h12: '12 h', neuerTag: 'Nowy dzień',
+    meine: 'Moja strefa', deine: 'Twoja strefa', tagK: 'd', teilM: '[ort]: [zeit] [kz]', satzM: '[A] = [B]',
+    fakten: [
+      ['UTC', 'Uniwersalny czas koordynowany, wzorzec czasu dla świata. Nie ma czasu letniego.'],
+      ['Zima', 'Niemcy używają CET = UTC+1 (od końca października do końca marca).'],
+      ['Lato', 'Niemcy używają CEST = UTC+2 (od końca marca do końca października).'],
+      ['Zmiana', 'W ostatnią niedzielę marca i października, o 01:00 UTC.'],
+      ['Zasada', 'UTC + 1 zimą, UTC + 2 latem.'],
+      ['Oś czasu', 'Zielone podkreślenie: zwykłe godziny pracy od 9 do 17. Ciemne: noc.']
+    ]
+  },
+  pt: {
+    install: 'Instalar', installDone: 'Instalado como app.', sprache: 'Idioma', darst: 'Aparência',
+    darstOpt: ['Sistema', 'Claro', 'Escuro', 'Alto contraste escuro', 'Alto contraste claro', 'Daltônico escuro', 'Daltônico claro', 'Cores invertidas'],
+    jetzt: 'Agora', datum: 'Data', tauschen: 'Inverter', regler: 'Arraste, clique ou use as setas', reglerL: 'Mover o horário',
+    sucheL: 'Adicionar um lugar ou digitar um horário', sucheP: 'Adicione um lugar ou digite um horário, ex.: “Tóquio” ou “9am Nova York”',
+    link: 'Copiar link', text: 'Copiar horários', ics: 'Adicionar à agenda', merken: 'Lembrar lugares neste dispositivo',
+    gemerkt: 'Seus lugares ficam salvos neste dispositivo.', vergessen: 'Lugares salvos apagados.',
+    umstH: 'Próximas mudanças de horário', faktH: 'Bom saber', spickH: 'Todas as horas do dia em tabela',
+    frei: 'Sem cookies, sem rastreamento, sem anúncios.', offline: 'Funciona offline depois da primeira visita.', tz: 'Dados de fuso horário: do seu navegador (IANA).',
+    gleich: 'mesmo horário', std: 'h', titelZwei: (a, b) => `Converter ${a} para ${b}`, titelEins: a => `Horário em ${a}`,
+    zeitIn: o => `Horário em ${o}`, nachOben: 'Mover para o topo como referência', entfernen: 'Remover',
+    keineUmst: o => `${o}: sem mudança de horário`, vor: 'o relógio adianta', zurueck: 'o relógio atrasa', inTagen: n => n === 0 ? 'hoje' : n === 1 ? 'amanhã' : `em ${n} dias`,
+    abstand: (a, b, von, bis, alt, neu) => `Atenção: de ${von} a ${bis}, a diferença entre ${a} e ${b} é de ${neu} em vez de ${alt}, porque o horário muda em dias diferentes.`,
+    luecke: (z, o, n) => `${z} não existe em ${o} nesse dia, o relógio adianta. Mostrando ${n}.`,
+    doppelt: (z, o) => `${z} acontece duas vezes em ${o} nesse dia.`, zweite: 'Mostrar a segunda', erste: 'Mostrar a primeira',
+    kopiert: 'Copiado.', kopierFehler: 'Não foi possível copiar. Selecione à mão.', kalender: 'Arquivo de agenda criado.',
+    nichtGefunden: 'Não conheço esse lugar.', schonDa: 'Esse lugar já está na lista.', hinzu: o => `${o} adicionado.`,
+    termin: 'Reunião', utcName: 'Tempo Universal Coordenado', h24: '24 h', h12: '12 h', neuerTag: 'Novo dia',
+    meine: 'Meu fuso', deine: 'seu fuso', tagK: 'd', teilM: '[zeit] [kz] em [ort]', satzM: '[A] equivale a [B]',
+    fakten: [
+      ['UTC', 'Tempo Universal Coordenado, a hora de referência do mundo. Não tem horário de verão.'],
+      ['Inverno', 'A Alemanha usa CET = UTC+1 (do fim de outubro ao fim de março).'],
+      ['Verão', 'A Alemanha usa CEST = UTC+2 (do fim de março ao fim de outubro).'],
+      ['Mudança', 'No último domingo de março e de outubro, às 01:00 UTC.'],
+      ['Regra', 'UTC + 1 no inverno, UTC + 2 no verão.'],
+      ['Linha do tempo', 'Sublinhado verde: horário comercial das 9 às 17. Escuro: noite.']
+    ]
+  },
+  tr: {
+    install: 'Yükle', installDone: 'Uygulama olarak yüklendi.', sprache: 'Dil', darst: 'Görünüm',
+    darstOpt: ['Sistem', 'Açık', 'Koyu', 'Yüksek karşıtlık koyu', 'Yüksek karşıtlık açık', 'Renk körü koyu', 'Renk körü açık', 'Ters renkler'],
+    jetzt: 'Şimdi', datum: 'Tarih', tauschen: 'Yer değiştir', regler: 'Sürükle, tıkla ya da ok tuşlarını kullan', reglerL: 'Saati kaydır',
+    sucheL: 'Yer ekle veya saat yaz', sucheP: 'Yer ekle veya saat yaz, ör. “Tokyo” ya da “9am New York”',
+    link: 'Bağlantıyı kopyala', text: 'Saatleri kopyala', ics: 'Takvime ekle', merken: 'Yerleri bu cihazda hatırla',
+    gemerkt: 'Yerlerin bu cihazda kayıtlı kalır.', vergessen: 'Kayıtlı yerler silindi.',
+    umstH: 'Sıradaki saat değişiklikleri', faktH: 'Bilmekte fayda var', spickH: 'Günün tüm saatleri tablo olarak',
+    frei: 'Çerez yok, takip yok, reklam yok.', offline: 'İlk ziyaretten sonra çevrimdışı da çalışır.', tz: 'Saat dilimi verileri: tarayıcından (IANA).',
+    gleich: 'aynı saat', std: 'sa', titelZwei: (a, b) => `${a} → ${b} dönüştür`, titelEins: a => `${a} saati`,
+    zeitIn: o => `${o} saati`, nachOben: 'Referans olarak en üste taşı', entfernen: 'Kaldır',
+    keineUmst: o => `${o}: saat değişikliği yok`, vor: 'saat ileri alınır', zurueck: 'saat geri alınır', inTagen: n => n === 0 ? 'bugün' : n === 1 ? 'yarın' : `${n} gün sonra`,
+    abstand: (a, b, von, bis, alt, neu) => `Dikkat: ${von} ile ${bis} arasında ${a} ↔ ${b} farkı ${alt} yerine ${neu}, çünkü saatler farklı günlerde değişiyor.`,
+    luecke: (z, o, n) => `${o}: bu gün ${z} yok, saat ileri atlıyor. Gösterilen: ${n}.`,
+    doppelt: (z, o) => `${o}: bu gün ${z} iki kez yaşanıyor.`, zweite: 'İkincisini göster', erste: 'Birincisini göster',
+    kopiert: 'Kopyalandı.', kopierFehler: 'Kopyalanamadı. Lütfen elle seç.', kalender: 'Takvim dosyası oluşturuldu.',
+    nichtGefunden: 'Bu yeri tanımıyorum.', schonDa: 'Bu yer zaten var.', hinzu: o => `${o} eklendi.`,
+    termin: 'Toplantı', utcName: 'Eşgüdümlü Evrensel Zaman', h24: '24 sa', h12: '12 sa', neuerTag: 'Yeni gün',
+    meine: 'Saat dilimim', deine: 'senin dilimin', tagK: 'g', teilM: '[ort]: [zeit] [kz]', satzM: '[A] = [B]',
+    fakten: [
+      ['UTC', 'Eşgüdümlü Evrensel Zaman, dünyanın referans saati. Yaz saati uygulaması yoktur.'],
+      ['Kış', 'Almanya CET = UTC+1 kullanır (ekim sonundan mart sonuna).'],
+      ['Yaz', 'Almanya CEST = UTC+2 kullanır (mart sonundan ekim sonuna).'],
+      ['Değişim', 'Mart ve ekim aylarının son pazar günü, 01:00 UTC’de.'],
+      ['Kural', 'Kışın UTC + 1, yazın UTC + 2.'],
+      ['Zaman çizelgesi', 'Yeşil alt çizgi: olağan mesai saatleri 9 ile 17 arası. Koyu: gece.']
+    ]
+  },
+  ru: {
+    install: 'Установить', installDone: 'Установлено как приложение.', sprache: 'Язык', darst: 'Оформление',
+    darstOpt: ['Системное', 'Светлое', 'Тёмное', 'Контрастная тёмная', 'Контрастная светлая', 'Для дальтоников, тёмная', 'Для дальтоников, светлая', 'Инверсия цветов'],
+    jetzt: 'Сейчас', datum: 'Дата', tauschen: 'Поменять', regler: 'Перетащи, нажми или используй стрелки', reglerL: 'Сдвинуть время',
+    sucheL: 'Добавить место или ввести время', sucheP: 'Добавь место или введи время, напр. «Токио» или «9am New York»',
+    link: 'Копировать ссылку', text: 'Копировать время', ics: 'В календарь', merken: 'Запомнить места на этом устройстве',
+    gemerkt: 'Твои места сохранены на этом устройстве.', vergessen: 'Сохранённые места удалены.',
+    umstH: 'Ближайшие переводы часов', faktH: 'Полезно знать', spickH: 'Все часы дня в таблице',
+    frei: 'Без cookie, без слежки, без рекламы.', offline: 'После первого визита работает и офлайн.', tz: 'Данные часовых поясов: из твоего браузера (IANA).',
+    gleich: 'то же время', std: 'ч', titelZwei: (a, b) => `Перевод времени: ${a} → ${b}`, titelEins: a => `Время: ${a}`,
+    zeitIn: o => `Время: ${o}`, nachOben: 'Поднять наверх как основу', entfernen: 'Убрать',
+    keineUmst: o => `${o}: без перевода часов`, vor: 'часы переводят вперёд', zurueck: 'часы переводят назад', inTagen: n => n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${n} дн.`,
+    abstand: (a, b, von, bis, alt, neu) => `Внимание: с ${von} по ${bis} разница ${a} ↔ ${b} составляет ${neu} вместо ${alt}, потому что часы там переводят в разные дни.`,
+    luecke: (z, o, n) => `${o}: в этот день времени ${z} нет, часы переводят вперёд. Показано ${n}.`,
+    doppelt: (z, o) => `${o}: в этот день время ${z} наступает дважды.`, zweite: 'Показать второй раз', erste: 'Показать первый раз',
+    kopiert: 'Скопировано.', kopierFehler: 'Не удалось скопировать. Выдели вручную.', kalender: 'Файл календаря создан.',
+    nichtGefunden: 'Не знаю такого места.', schonDa: 'Это место уже есть.', hinzu: o => `Добавлено: ${o}.`,
+    termin: 'Встреча', utcName: 'Всемирное координированное время', h24: '24 ч', h12: '12 ч', neuerTag: 'Новый день',
+    meine: 'Мой часовой пояс', deine: 'твой пояс', tagK: 'д', teilM: '[ort]: [zeit] [kz]', satzM: '[A] = [B]',
+    fakten: [
+      ['UTC', 'Всемирное координированное время, эталон для всего мира. Летнего времени нет.'],
+      ['Зима', 'В Германии CET = UTC+1 (с конца октября до конца марта).'],
+      ['Лето', 'В Германии CEST = UTC+2 (с конца марта до конца октября).'],
+      ['Перевод', 'В последнее воскресенье марта и октября, в 01:00 UTC.'],
+      ['Запомнить', 'Зимой UTC + 1, летом UTC + 2.'],
+      ['Шкала', 'Зелёное подчёркивание: обычные рабочие часы с 9 до 17. Тёмное: ночь.']
+    ]
+  },
+  hi: {
+    install: 'इंस्टॉल करें', installDone: 'ऐप के रूप में इंस्टॉल हो गया।', sprache: 'भाषा', darst: 'रूप',
+    darstOpt: ['सिस्टम', 'हल्का', 'गहरा', 'उच्च कंट्रास्ट गहरी', 'उच्च कंट्रास्ट हल्की', 'रंगांधता-अनुकूल गहरी', 'रंगांधता-अनुकूल हल्की', 'उलटे रंग'],
+    jetzt: 'अभी', datum: 'तारीख', tauschen: 'अदला-बदली', regler: 'खींचें, क्लिक करें या तीर कुंजियाँ दबाएँ', reglerL: 'समय खिसकाएँ',
+    sucheL: 'जगह जोड़ें या समय लिखें', sucheP: 'जगह जोड़ें या समय लिखें, जैसे “टोक्यो” या “9am New York”',
+    link: 'लिंक कॉपी करें', text: 'समय कॉपी करें', ics: 'कैलेंडर में जोड़ें', merken: 'इस डिवाइस पर जगहें याद रखें',
+    gemerkt: 'आपकी जगहें इस डिवाइस पर सहेजी रहेंगी।', vergessen: 'सहेजी गई जगहें हटा दी गईं।',
+    umstH: 'अगले समय-बदलाव', faktH: 'जानने लायक', spickH: 'दिन के सभी घंटे तालिका में',
+    frei: 'कोई कुकी नहीं, कोई ट्रैकिंग नहीं, कोई विज्ञापन नहीं।', offline: 'पहली बार खोलने के बाद ऑफ़लाइन भी चलता है।', tz: 'समय क्षेत्र डेटा: आपके ब्राउज़र से (IANA)।',
+    gleich: 'एक ही समय', std: 'घं.', titelZwei: (a, b) => `${a} से ${b} का समय`, titelEins: a => `${a} में समय`,
+    zeitIn: o => `${o} में समय`, nachOben: 'संदर्भ के रूप में ऊपर ले जाएँ', entfernen: 'हटाएँ',
+    keineUmst: o => `${o}: समय नहीं बदलता`, vor: 'घड़ी आगे होती है', zurueck: 'घड़ी पीछे होती है', inTagen: n => n === 0 ? 'आज' : n === 1 ? 'कल' : `${n} दिन में`,
+    abstand: (a, b, von, bis, alt, neu) => `ध्यान दें: ${von} से ${bis} तक ${a} और ${b} के बीच अंतर ${alt} की जगह ${neu} है, क्योंकि वहाँ घड़ियाँ अलग-अलग दिन बदलती हैं।`,
+    luecke: (z, o, n) => `${o} में उस दिन ${z} नहीं होता, घड़ी आगे बढ़ जाती है। दिखाया गया: ${n}।`,
+    doppelt: (z, o) => `${o} में उस दिन ${z} दो बार आता है।`, zweite: 'दूसरी बार दिखाएँ', erste: 'पहली बार दिखाएँ',
+    kopiert: 'कॉपी हो गया।', kopierFehler: 'कॉपी नहीं हो सका। कृपया खुद चुनें।', kalender: 'कैलेंडर फ़ाइल बन गई।',
+    nichtGefunden: 'यह जगह नहीं मिली।', schonDa: 'यह जगह पहले से है।', hinzu: o => `${o} जोड़ा गया।`,
+    termin: 'मीटिंग', utcName: 'समन्वित सार्वभौमिक समय', h24: '24 घं.', h12: '12 घं.', neuerTag: 'नया दिन',
+    meine: 'मेरा समय क्षेत्र', deine: 'आपका क्षेत्र', tagK: 'दि.', teilM: '[ort]: [zeit] [kz]', satzM: '[A] = [B]',
+    fakten: [
+      ['UTC', 'समन्वित सार्वभौमिक समय, दुनिया का संदर्भ समय। इसमें डेलाइट सेविंग नहीं होती।'],
+      ['सर्दी', 'जर्मनी CET = UTC+1 इस्तेमाल करता है (अक्टूबर के अंत से मार्च के अंत तक)।'],
+      ['गर्मी', 'जर्मनी CEST = UTC+2 इस्तेमाल करता है (मार्च के अंत से अक्टूबर के अंत तक)।'],
+      ['बदलाव', 'मार्च और अक्टूबर के आख़िरी रविवार को, 01:00 UTC पर।'],
+      ['याद रखें', 'सर्दी में UTC + 1, गर्मी में UTC + 2।'],
+      ['समय-रेखा', 'हरी रेखा: सामान्य काम के घंटे 9 से 17 बजे तक। गहरा: रात।']
+    ]
+  },
+  zh: {
+    install: '安装', installDone: '已作为应用安装。', sprache: '语言', darst: '外观',
+    darstOpt: ['跟随系统', '浅色', '深色', '高对比度深色', '高对比度浅色', '色盲友好深色', '色盲友好浅色', '反转颜色'],
+    jetzt: '现在', datum: '日期', tauschen: '交换', regler: '拖动、点击或使用方向键', reglerL: '调整时间',
+    sucheL: '添加地点或输入时间', sucheP: '添加地点或输入时间，例如“东京”或“9am New York”',
+    link: '复制链接', text: '复制时间', ics: '添加到日历', merken: '在此设备上记住地点',
+    gemerkt: '你的地点会保存在此设备上。', vergessen: '已删除保存的地点。',
+    umstH: '即将到来的时间调整', faktH: '小知识', spickH: '全天每小时对照表',
+    frei: '无 Cookie，无跟踪，无广告。', offline: '首次访问后可离线使用。', tz: '时区数据：来自你的浏览器（IANA）。',
+    gleich: '时间相同', std: '小时', titelZwei: (a, b) => `${a} 转换为 ${b}`, titelEins: a => `${a} 时间`,
+    zeitIn: o => `${o} 时间`, nachOben: '移到顶部作为基准', entfernen: '移除',
+    keineUmst: o => `${o}：不调整时间`, vor: '时钟拨快', zurueck: '时钟拨慢', inTagen: n => n === 0 ? '今天' : n === 1 ? '明天' : `${n} 天后`,
+    abstand: (a, b, von, bis, alt, neu) => `注意：${von}至${bis}期间，${a}与${b}相差${neu}，而不是通常的${alt}，因为两地在不同日期调整时间。`,
+    luecke: (z, o, n) => `${o}当天没有 ${z}，时钟会向前跳。显示为 ${n}。`,
+    doppelt: (z, o) => `${o}当天 ${z} 会出现两次。`, zweite: '显示第二次', erste: '显示第一次',
+    kopiert: '已复制。', kopierFehler: '复制失败，请手动选择。', kalender: '已创建日历文件。',
+    nichtGefunden: '找不到这个地点。', schonDa: '这个地点已在列表中。', hinzu: o => `已添加 ${o}。`,
+    termin: '会议', utcName: '协调世界时', h24: '24 小时', h12: '12 小时', neuerTag: '新的一天',
+    meine: '我的时区', deine: '你的时区', tagK: '天', teilM: '[ort] [zeit] [kz]', satzM: '[A] 相当于 [B]',
+    fakten: [
+      ['UTC', '协调世界时，全球的基准时间，没有夏令时。'],
+      ['冬季', '德国使用 CET = UTC+1（10 月底至 3 月底）。'],
+      ['夏季', '德国使用 CEST = UTC+2（3 月底至 10 月底）。'],
+      ['切换', '3 月和 10 月的最后一个星期日，01:00 UTC。'],
+      ['口诀', '冬季 UTC + 1，夏季 UTC + 2。'],
+      ['时间轴', '绿色下划线：常规工作时间 9 点至 17 点。深色：夜间。']
+    ]
+  },
+  ja: {
+    install: 'インストール', installDone: 'アプリとしてインストールしました。', sprache: '言語', darst: '表示',
+    darstOpt: ['システム', 'ライト', 'ダーク', 'ハイコントラスト（ダーク）', 'ハイコントラスト（ライト）', '色覚サポート（ダーク）', '色覚サポート（ライト）', '色反転'],
+    jetzt: '現在', datum: '日付', tauschen: '入れ替え', regler: 'ドラッグ、クリック、または矢印キー', reglerL: '時刻を動かす',
+    sucheL: '場所を追加、または時刻を入力', sucheP: '場所を追加、または時刻を入力（例：「東京」「9am New York」）',
+    link: 'リンクをコピー', text: '時刻をコピー', ics: 'カレンダーに追加', merken: 'この端末で場所を記憶',
+    gemerkt: '場所をこの端末に保存しました。', vergessen: '保存した場所を削除しました。',
+    umstH: '次の時刻切り替え', faktH: '知っておくと便利', spickH: '1 日の全時間を表で表示',
+    frei: 'Cookie なし、トラッキングなし、広告なし。', offline: '初回アクセス後はオフラインでも使えます。', tz: 'タイムゾーンデータ：ブラウザー内蔵（IANA）。',
+    gleich: '同じ時刻', std: '時間', titelZwei: (a, b) => `${a} を ${b} に変換`, titelEins: a => `${a} の時刻`,
+    zeitIn: o => `${o} の時刻`, nachOben: '基準として一番上へ', entfernen: '削除',
+    keineUmst: o => `${o}：時刻の切り替えなし`, vor: '時計を進める', zurueck: '時計を戻す', inTagen: n => n === 0 ? '今日' : n === 1 ? '明日' : `${n} 日後`,
+    abstand: (a, b, von, bis, alt, neu) => `注意：${von}から${bis}まで、${a}と${b}の時差は通常の${alt}ではなく${neu}です。切り替え日が異なるためです。`,
+    luecke: (z, o, n) => `${o}ではこの日 ${z} は存在しません（時計が進みます）。${n} を表示しています。`,
+    doppelt: (z, o) => `${o}ではこの日 ${z} が 2 回あります。`, zweite: '2 回目を表示', erste: '1 回目を表示',
+    kopiert: 'コピーしました。', kopierFehler: 'コピーできませんでした。手動で選択してください。', kalender: 'カレンダーファイルを作成しました。',
+    nichtGefunden: 'その場所は見つかりません。', schonDa: 'その場所はすでにあります。', hinzu: o => `${o} を追加しました。`,
+    termin: '予定', utcName: '協定世界時', h24: '24 時間', h12: '12 時間', neuerTag: '翌日',
+    meine: '自分のタイムゾーン', deine: 'あなたのゾーン', tagK: '日', teilM: '[ort] [zeit] [kz]', satzM: '[A] は [B]',
+    fakten: [
+      ['UTC', '協定世界時。世界の基準となる時刻で、夏時間はありません。'],
+      ['冬', 'ドイツは CET = UTC+1（10 月末から 3 月末）。'],
+      ['夏', 'ドイツは CEST = UTC+2（3 月末から 10 月末）。'],
+      ['切り替え', '3 月と 10 月の最終日曜日、01:00 UTC。'],
+      ['覚え方', '冬は UTC + 1、夏は UTC + 2。'],
+      ['タイムライン', '緑の下線：一般的な勤務時間 9 時から 17 時。暗い色：夜。']
+    ]
+  },
+  ko: {
+    install: '설치', installDone: '앱으로 설치되었습니다.', sprache: '언어', darst: '화면 모드',
+    darstOpt: ['시스템', '라이트', '다크', '고대비 다크', '고대비 라이트', '색각 배려 다크', '색각 배려 라이트', '색상 반전'],
+    jetzt: '지금', datum: '날짜', tauschen: '바꾸기', regler: '드래그, 클릭 또는 화살표 키', reglerL: '시간 이동',
+    sucheL: '장소 추가 또는 시간 입력', sucheP: '장소를 추가하거나 시간을 입력하세요. 예: “도쿄”, “9am New York”',
+    link: '링크 복사', text: '시간 복사', ics: '캘린더에 추가', merken: '이 기기에 장소 기억',
+    gemerkt: '장소가 이 기기에 저장됩니다.', vergessen: '저장된 장소를 삭제했습니다.',
+    umstH: '다음 시간 변경', faktH: '알아 두면 좋은 점', spickH: '하루 전체 시간표',
+    frei: '쿠키 없음, 추적 없음, 광고 없음.', offline: '처음 방문한 뒤에는 오프라인에서도 작동합니다.', tz: '시간대 데이터: 브라우저 내장(IANA).',
+    gleich: '같은 시간', std: '시간', titelZwei: (a, b) => `${a} → ${b} 시간 변환`, titelEins: a => `${a} 시간`,
+    zeitIn: o => `${o} 시간`, nachOben: '기준으로 맨 위로', entfernen: '삭제',
+    keineUmst: o => `${o}: 시간 변경 없음`, vor: '시계를 앞당김', zurueck: '시계를 늦춤', inTagen: n => n === 0 ? '오늘' : n === 1 ? '내일' : `${n}일 후`,
+    abstand: (a, b, von, bis, alt, neu) => `주의: ${von}부터 ${bis}까지 ${a} ↔ ${b} 시차는 평소의 ${alt}이 아니라 ${neu}입니다. 시간 변경 날짜가 다르기 때문입니다.`,
+    luecke: (z, o, n) => `${o}: 이날에는 ${z} 시각이 없습니다. 시계가 앞당겨지므로 ${n} 시각으로 표시합니다.`,
+    doppelt: (z, o) => `${o}: 이날에는 ${z} 시각이 두 번 있습니다.`, zweite: '두 번째 보기', erste: '첫 번째 보기',
+    kopiert: '복사했습니다.', kopierFehler: '복사하지 못했습니다. 직접 선택하세요.', kalender: '캘린더 파일을 만들었습니다.',
+    nichtGefunden: '알 수 없는 장소입니다.', schonDa: '이미 있는 장소입니다.', hinzu: o => `추가됨: ${o}`,
+    termin: '일정', utcName: '협정 세계시', h24: '24시간', h12: '12시간', neuerTag: '다음 날',
+    meine: '내 시간대', deine: '내 시간대', tagK: '일', teilM: '[ort] [zeit] [kz]', satzM: '[A] = [B]',
+    fakten: [
+      ['UTC', '협정 세계시. 세계의 기준 시간이며 서머타임이 없습니다.'],
+      ['겨울', '독일은 CET = UTC+1을 씁니다(10월 말부터 3월 말까지).'],
+      ['여름', '독일은 CEST = UTC+2를 씁니다(3월 말부터 10월 말까지).'],
+      ['변경', '3월과 10월의 마지막 일요일 01:00 UTC.'],
+      ['요약', '겨울 UTC + 1, 여름 UTC + 2.'],
+      ['타임라인', '초록 밑줄: 일반 근무 시간 9시부터 17시까지. 어두운 칸: 밤.']
+    ]
+  }
+};
+
+/* ===================== Orte ===================== */
+// [IANA, Name de, Name en, Land de, Land en, Suchwörter]
+const ORTE = [
+  ['UTC', 'UTC', 'UTC', 'Weltzeit', 'Universal time', 'gmt zulu z utc weltzeit'],
+  ['Europe/Berlin', 'Berlin', 'Berlin', 'Deutschland', 'Germany', 'mez mesz cet cest deutschland germany hamburg münchen munich köln frankfurt'],
+  ['Europe/London', 'London', 'London', 'Vereinigtes Königreich', 'United Kingdom', 'bst gmt england uk britain'],
+  ['Europe/Paris', 'Paris', 'Paris', 'Frankreich', 'France', 'cet'],
+  ['Europe/Madrid', 'Madrid', 'Madrid', 'Spanien', 'Spain', ''],
+  ['Europe/Rome', 'Rom', 'Rome', 'Italien', 'Italy', 'roma'],
+  ['Europe/Vienna', 'Wien', 'Vienna', 'Österreich', 'Austria', 'wien'],
+  ['Europe/Zurich', 'Zürich', 'Zurich', 'Schweiz', 'Switzerland', 'bern genf'],
+  ['Europe/Amsterdam', 'Amsterdam', 'Amsterdam', 'Niederlande', 'Netherlands', 'holland'],
+  ['Europe/Brussels', 'Brüssel', 'Brussels', 'Belgien', 'Belgium', ''],
+  ['Europe/Copenhagen', 'Kopenhagen', 'Copenhagen', 'Dänemark', 'Denmark', ''],
+  ['Europe/Stockholm', 'Stockholm', 'Stockholm', 'Schweden', 'Sweden', ''],
+  ['Europe/Oslo', 'Oslo', 'Oslo', 'Norwegen', 'Norway', ''],
+  ['Europe/Helsinki', 'Helsinki', 'Helsinki', 'Finnland', 'Finland', 'eet'],
+  ['Europe/Warsaw', 'Warschau', 'Warsaw', 'Polen', 'Poland', ''],
+  ['Europe/Prague', 'Prag', 'Prague', 'Tschechien', 'Czechia', ''],
+  ['Europe/Lisbon', 'Lissabon', 'Lisbon', 'Portugal', 'Portugal', 'wet'],
+  ['Europe/Athens', 'Athen', 'Athens', 'Griechenland', 'Greece', 'eet'],
+  ['Europe/Istanbul', 'Istanbul', 'Istanbul', 'Türkei', 'Türkiye', 'trt ankara'],
+  ['Europe/Kyiv', 'Kyjiw', 'Kyiv', 'Ukraine', 'Ukraine', 'kiew kiev'],
+  ['Europe/Moscow', 'Moskau', 'Moscow', 'Russland', 'Russia', 'msk'],
+  ['Europe/Dublin', 'Dublin', 'Dublin', 'Irland', 'Ireland', 'ist'],
+  ['Atlantic/Reykjavik', 'Reykjavík', 'Reykjavik', 'Island', 'Iceland', ''],
+  ['America/New_York', 'New York', 'New York', 'USA (Ostküste)', 'USA (East)', 'est edt et eastern nyc washington boston miami'],
+  ['America/Chicago', 'Chicago', 'Chicago', 'USA (Mitte)', 'USA (Central)', 'cst cdt ct central dallas houston'],
+  ['America/Denver', 'Denver', 'Denver', 'USA (Gebirge)', 'USA (Mountain)', 'mst mdt mt mountain'],
+  ['America/Phoenix', 'Phoenix', 'Phoenix', 'USA (Arizona)', 'USA (Arizona)', 'arizona'],
+  ['America/Los_Angeles', 'Los Angeles', 'Los Angeles', 'USA (Westküste)', 'USA (West)', 'pst pdt pt pacific san francisco seattle la'],
+  ['America/Anchorage', 'Anchorage', 'Anchorage', 'USA (Alaska)', 'USA (Alaska)', 'akst alaska'],
+  ['Pacific/Honolulu', 'Honolulu', 'Honolulu', 'USA (Hawaii)', 'USA (Hawaii)', 'hst hawaii'],
+  ['America/Toronto', 'Toronto', 'Toronto', 'Kanada', 'Canada', 'montreal ottawa'],
+  ['America/Vancouver', 'Vancouver', 'Vancouver', 'Kanada', 'Canada', ''],
+  ['America/Halifax', 'Halifax', 'Halifax', 'Kanada', 'Canada', 'ast atlantic'],
+  ['America/Mexico_City', 'Mexiko-Stadt', 'Mexico City', 'Mexiko', 'Mexico', ''],
+  ['America/Sao_Paulo', 'São Paulo', 'São Paulo', 'Brasilien', 'Brazil', 'brt rio'],
+  ['America/Argentina/Buenos_Aires', 'Buenos Aires', 'Buenos Aires', 'Argentinien', 'Argentina', ''],
+  ['America/Bogota', 'Bogotá', 'Bogotá', 'Kolumbien', 'Colombia', ''],
+  ['America/Lima', 'Lima', 'Lima', 'Peru', 'Peru', ''],
+  ['America/Santiago', 'Santiago', 'Santiago', 'Chile', 'Chile', ''],
+  ['Africa/Cairo', 'Kairo', 'Cairo', 'Ägypten', 'Egypt', ''],
+  ['Africa/Johannesburg', 'Johannesburg', 'Johannesburg', 'Südafrika', 'South Africa', 'sast kapstadt cape town'],
+  ['Africa/Lagos', 'Lagos', 'Lagos', 'Nigeria', 'Nigeria', 'wat'],
+  ['Africa/Nairobi', 'Nairobi', 'Nairobi', 'Kenia', 'Kenya', 'eat'],
+  ['Asia/Dubai', 'Dubai', 'Dubai', 'Vereinigte Arabische Emirate', 'United Arab Emirates', 'gst abu dhabi'],
+  ['Asia/Tehran', 'Teheran', 'Tehran', 'Iran', 'Iran', ''],
+  ['Asia/Karachi', 'Karatschi', 'Karachi', 'Pakistan', 'Pakistan', 'pkt'],
+  ['Asia/Kolkata', 'Neu-Delhi', 'New Delhi', 'Indien', 'India', 'ist india mumbai bangalore kalkutta kolkata delhi'],
+  ['Asia/Kathmandu', 'Kathmandu', 'Kathmandu', 'Nepal', 'Nepal', ''],
+  ['Asia/Dhaka', 'Dhaka', 'Dhaka', 'Bangladesch', 'Bangladesh', ''],
+  ['Asia/Bangkok', 'Bangkok', 'Bangkok', 'Thailand', 'Thailand', 'ict'],
+  ['Asia/Jakarta', 'Jakarta', 'Jakarta', 'Indonesien', 'Indonesia', 'wib'],
+  ['Asia/Singapore', 'Singapur', 'Singapore', 'Singapur', 'Singapore', 'sgt'],
+  ['Asia/Hong_Kong', 'Hongkong', 'Hong Kong', 'China', 'China', 'hkt'],
+  ['Asia/Shanghai', 'Peking', 'Beijing', 'China', 'China', 'cst china shanghai beijing'],
+  ['Asia/Taipei', 'Taipeh', 'Taipei', 'Taiwan', 'Taiwan', ''],
+  ['Asia/Manila', 'Manila', 'Manila', 'Philippinen', 'Philippines', ''],
+  ['Asia/Seoul', 'Seoul', 'Seoul', 'Südkorea', 'South Korea', 'kst korea'],
+  ['Asia/Tokyo', 'Tokio', 'Tokyo', 'Japan', 'Japan', 'jst osaka'],
+  ['Australia/Perth', 'Perth', 'Perth', 'Australien', 'Australia', 'awst'],
+  ['Australia/Sydney', 'Sydney', 'Sydney', 'Australien', 'Australia', 'aest aedt melbourne canberra'],
+  ['Australia/Brisbane', 'Brisbane', 'Brisbane', 'Australien', 'Australia', ''],
+  ['Pacific/Auckland', 'Auckland', 'Auckland', 'Neuseeland', 'New Zealand', 'nzst nzdt wellington']
+];
+const ORT_BY_ID = new Map(ORTE.map(o => [o[0], o]));
+const ORT_BY_STADT = new Map(ORTE.map(o => [o[0].split('/').pop(), o[0]]));
+/* Länderkürzel je Ort: Intl.DisplayNames übersetzt daraus den Ländernamen in jede Sprache. */
+const REGION = {};
+('Berlin DE London GB Paris FR Madrid ES Rome IT Vienna AT Zurich CH Amsterdam NL Brussels BE Copenhagen DK Stockholm SE Oslo NO Helsinki FI ' +
+ 'Warsaw PL Prague CZ Lisbon PT Athens GR Istanbul TR Kyiv UA Moscow RU Dublin IE Reykjavik IS New_York US Chicago US Denver US Phoenix US ' +
+ 'Los_Angeles US Anchorage US Honolulu US Toronto CA Vancouver CA Halifax CA Mexico_City MX Sao_Paulo BR Buenos_Aires AR Bogota CO Lima PE ' +
+ 'Santiago CL Cairo EG Johannesburg ZA Lagos NG Nairobi KE Dubai AE Tehran IR Karachi PK Kolkata IN Kathmandu NP Dhaka BD Bangkok TH ' +
+ 'Jakarta ID Singapore SG Hong_Kong HK Shanghai CN Taipei TW Manila PH Seoul KR Tokyo JP Perth AU Sydney AU Brisbane AU Auckland NZ')
+  .split(' ').reduce((a, v, i, arr) => { if (i % 2 === 0) REGION[ORT_BY_STADT.get(v)] = arr[i + 1]; return a; }, 0);
+/* Ortsnamen, die in einer Sprache anders heißen als auf Englisch. Schlüssel: letzter Teil der Zone. */
+const NAMEN_ROH = {
+  es: 'London=Londres|Rome=Roma|Vienna=Viena|Zurich=Zúrich|Brussels=Bruselas|Copenhagen=Copenhague|Stockholm=Estocolmo|Warsaw=Varsovia|Prague=Praga|Lisbon=Lisboa|Athens=Atenas|Istanbul=Estambul|Kyiv=Kiev|Moscow=Moscú|New_York=Nueva York|Mexico_City=Ciudad de México|Cairo=El Cairo|Tehran=Teherán|Kolkata=Nueva Delhi|Singapore=Singapur|Shanghai=Pekín|Taipei=Taipéi|Seoul=Seúl|Tokyo=Tokio|Berlin=Berlín',
+  fr: 'London=Londres|Vienna=Vienne|Brussels=Bruxelles|Copenhagen=Copenhague|Warsaw=Varsovie|Lisbon=Lisbonne|Athens=Athènes|Moscow=Moscou|Mexico_City=Mexico|Cairo=Le Caire|Tehran=Téhéran|Kolkata=New Delhi|Singapore=Singapour|Shanghai=Pékin|Seoul=Séoul|Dubai=Dubaï',
+  it: 'London=Londra|Paris=Parigi|Rome=Roma|Zurich=Zurigo|Brussels=Bruxelles|Copenhagen=Copenaghen|Stockholm=Stoccolma|Warsaw=Varsavia|Prague=Praga|Lisbon=Lisbona|Athens=Atene|Moscow=Mosca|Mexico_City=Città del Messico|Cairo=Il Cairo|Tehran=Teheran|Kolkata=Nuova Delhi|Shanghai=Pechino|Seoul=Seul|Sao_Paulo=San Paolo|Berlin=Berlino',
+  nl: 'London=Londen|Paris=Parijs|Vienna=Wenen|Zurich=Zürich|Brussels=Brussel|Copenhagen=Kopenhagen|Warsaw=Warschau|Prague=Praag|Lisbon=Lissabon|Athens=Athene|Moscow=Moskou|Cairo=Caïro|Tehran=Teheran|Kolkata=New Delhi|Shanghai=Peking|Tokyo=Tokio|Mexico_City=Mexico-Stad',
+  pl: 'London=Londyn|Paris=Paryż|Madrid=Madryt|Rome=Rzym|Vienna=Wiedeń|Zurich=Zurych|Brussels=Bruksela|Copenhagen=Kopenhaga|Stockholm=Sztokholm|Warsaw=Warszawa|Prague=Praga|Lisbon=Lizbona|Athens=Ateny|Istanbul=Stambuł|Kyiv=Kijów|Moscow=Moskwa|New_York=Nowy Jork|Mexico_City=Meksyk|Cairo=Kair|Tehran=Teheran|Kolkata=Nowe Delhi|Singapore=Singapur|Shanghai=Pekin|Seoul=Seul|Tokyo=Tokio|Dubai=Dubaj',
+  pt: 'London=Londres|Rome=Roma|Vienna=Viena|Zurich=Zurique|Brussels=Bruxelas|Copenhagen=Copenhague|Stockholm=Estocolmo|Warsaw=Varsóvia|Prague=Praga|Lisbon=Lisboa|Athens=Atenas|Istanbul=Istambul|Kyiv=Kiev|Moscow=Moscou|Berlin=Berlim|New_York=Nova York|Mexico_City=Cidade do México|Tehran=Teerã|Kolkata=Nova Délhi|Singapore=Singapura|Shanghai=Pequim|Seoul=Seul|Tokyo=Tóquio',
+  tr: 'London=Londra|Rome=Roma|Vienna=Viyana|Zurich=Zürih|Brussels=Brüksel|Copenhagen=Kopenhag|Warsaw=Varşova|Prague=Prag|Lisbon=Lizbon|Athens=Atina|Moscow=Moskova|Kyiv=Kiev|Cairo=Kahire|Tehran=Tahran|Kolkata=Yeni Delhi|Singapore=Singapur|Shanghai=Pekin|Seoul=Seul|Mexico_City=Meksiko|Istanbul=İstanbul',
+  ru: 'Berlin=Берлин|London=Лондон|Paris=Париж|Madrid=Мадрид|Rome=Рим|Vienna=Вена|Zurich=Цюрих|Amsterdam=Амстердам|Brussels=Брюссель|Warsaw=Варшава|Prague=Прага|Istanbul=Стамбул|Kyiv=Киев|Moscow=Москва|New_York=Нью-Йорк|Chicago=Чикаго|Los_Angeles=Лос-Анджелес|Toronto=Торонто|Sao_Paulo=Сан-Паулу|Dubai=Дубай|Kolkata=Нью-Дели|Bangkok=Бангкок|Singapore=Сингапур|Hong_Kong=Гонконг|Shanghai=Пекин|Seoul=Сеул|Tokyo=Токио|Sydney=Сидней|Cairo=Каир|Tehran=Тегеран|Lisbon=Лиссабон|Athens=Афины|Helsinki=Хельсинки|Stockholm=Стокгольм|Oslo=Осло|Copenhagen=Копенгаген|Dublin=Дублин|Mexico_City=Мехико',
+  hi: 'Berlin=बर्लिन|London=लंदन|Paris=पेरिस|Rome=रोम|Madrid=मैड्रिड|Moscow=मॉस्को|Istanbul=इस्तांबुल|New_York=न्यूयॉर्क|Los_Angeles=लॉस एंजेलिस|Chicago=शिकागो|Toronto=टोरंटो|Dubai=दुबई|Kolkata=नई दिल्ली|Karachi=कराची|Kathmandu=काठमांडू|Dhaka=ढाका|Singapore=सिंगापुर|Shanghai=बीजिंग|Hong_Kong=हांगकांग|Tokyo=टोक्यो|Seoul=सियोल|Sydney=सिडनी|Bangkok=बैंकॉक',
+  zh: 'Berlin=柏林|London=伦敦|Paris=巴黎|Madrid=马德里|Rome=罗马|Vienna=维也纳|Zurich=苏黎世|Amsterdam=阿姆斯特丹|Brussels=布鲁塞尔|Warsaw=华沙|Prague=布拉格|Istanbul=伊斯坦布尔|Kyiv=基辅|Moscow=莫斯科|New_York=纽约|Chicago=芝加哥|Los_Angeles=洛杉矶|Toronto=多伦多|Vancouver=温哥华|Sao_Paulo=圣保罗|Mexico_City=墨西哥城|Dubai=迪拜|Kolkata=新德里|Bangkok=曼谷|Singapore=新加坡|Hong_Kong=香港|Shanghai=北京|Taipei=台北|Seoul=首尔|Tokyo=东京|Sydney=悉尼|Auckland=奥克兰|Cairo=开罗|Lisbon=里斯本|Athens=雅典|Stockholm=斯德哥尔摩|Dublin=都柏林|Honolulu=檀香山|Jakarta=雅加达|Manila=马尼拉',
+  ja: 'Berlin=ベルリン|London=ロンドン|Paris=パリ|Madrid=マドリード|Rome=ローマ|Vienna=ウィーン|Zurich=チューリッヒ|Amsterdam=アムステルダム|Brussels=ブリュッセル|Warsaw=ワルシャワ|Prague=プラハ|Istanbul=イスタンブール|Kyiv=キーウ|Moscow=モスクワ|New_York=ニューヨーク|Chicago=シカゴ|Los_Angeles=ロサンゼルス|Toronto=トロント|Vancouver=バンクーバー|Sao_Paulo=サンパウロ|Dubai=ドバイ|Kolkata=ニューデリー|Bangkok=バンコク|Singapore=シンガポール|Hong_Kong=香港|Shanghai=北京|Taipei=台北|Seoul=ソウル|Tokyo=東京|Sydney=シドニー|Honolulu=ホノルル|Cairo=カイロ|Mexico_City=メキシコシティ|Manila=マニラ|Jakarta=ジャカルタ',
+  ko: 'Berlin=베를린|London=런던|Paris=파리|Madrid=마드리드|Rome=로마|Vienna=빈|Zurich=취리히|Amsterdam=암스테르담|Moscow=모스크바|Istanbul=이스탄불|Kyiv=키이우|New_York=뉴욕|Chicago=시카고|Los_Angeles=로스앤젤레스|Toronto=토론토|Vancouver=밴쿠버|Sao_Paulo=상파울루|Dubai=두바이|Kolkata=뉴델리|Bangkok=방콕|Singapore=싱가포르|Hong_Kong=홍콩|Shanghai=베이징|Taipei=타이베이|Seoul=서울|Tokyo=도쿄|Sydney=시드니|Honolulu=호놀룰루|Manila=마닐라|Jakarta=자카르타|Cairo=카이로'
+};
+const NAMEN = {};
+for (const [l, roh] of Object.entries(NAMEN_ROH)) {
+  NAMEN[l] = {};
+  roh.split('|').forEach(p => { const [k, v] = p.split('='); const id = ORT_BY_STADT.get(k); if (id) NAMEN[l][id] = v; });
+}
+let ALLE_ZONEN = [];
+try { ALLE_ZONEN = Intl.supportedValuesOf('timeZone'); } catch (e) { ALLE_ZONEN = ORTE.map(o => o[0]); }
+if (!ALLE_ZONEN.includes('UTC')) ALLE_ZONEN = ['UTC', ...ALLE_ZONEN];
+function gueltig(tz) { try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch (e) { return false; } }
+const kanonCache = new Map();
+function kanon(tz) {
+  if (!kanonCache.has(tz)) { let k = null; try { k = new Intl.DateTimeFormat('en', { timeZone: tz }).resolvedOptions().timeZone; } catch (e) {} kanonCache.set(tz, k); }
+  return kanonCache.get(tz);
+}
+/* Die Zeitzone dieses Geräts, ohne Standortabfrage: der Browser kennt sie ohnehin. Bekannte Orte
+   bekommen ihren schönen Namen (Asia/Calcutta → Asia/Kolkata = Neu-Delhi). */
+const EIGENE = (() => {
+  let z = null; try { z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
+  if (!z || !gueltig(z)) return null;
+  const k = kanon(z), o = ORTE.find(x => gueltig(x[0]) && kanon(x[0]) === k);
+  return o ? o[0] : z;
+})();
+const istEigene = tz => !!EIGENE && kanon(tz) === kanon(EIGENE);
+
+/* ===================== Zeitrechnung ===================== */
+const MIN = 60000, STD = 3600000, TAG = 86400000;
+const fmtCache = new Map();
+function teileFmt(tz) {
+  let f = fmtCache.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short' });
+    fmtCache.set(tz, f);
+  }
+  return f;
+}
+const WT = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+function wand(tz, ms) {
+  const p = {};
+  for (const x of teileFmt(tz).formatToParts(ms)) p[x.type] = x.value;
+  return { y: +p.year, mo: +p.month, d: +p.day, h: (+p.hour) % 24, mi: +p.minute, s: +p.second, wd: WT[p.weekday] };
+}
+function versatz(tz, ms) {
+  const w = wand(tz, ms);
+  const s = Math.floor(ms / 1000) * 1000;
+  return Math.round((Date.UTC(w.y, w.mo - 1, w.d, w.h, w.mi, w.s) - s) / MIN);
+}
+/* Ortszeit → Zeitpunkt. Meldet Lücken (Uhr springt vor) und doppelte Stunden (Uhr springt zurück). */
+function ortszeit(tz, y, mo, d, h, mi) {
+  const g = Date.UTC(y, mo - 1, d, h, mi);
+  const vor = versatz(tz, g - TAG), nach = versatz(tz, g + TAG);
+  const kand = [];
+  for (const o of new Set([vor, versatz(tz, g), nach])) {
+    const t = g - o * MIN, w = wand(tz, t);
+    if (w.y === y && w.mo === mo && w.d === d && w.h === h && w.mi === mi && !kand.includes(t)) kand.push(t);
+  }
+  kand.sort((a, b) => a - b);
+  if (!kand.length) return { t: g - vor * MIN, luecke: true };
+  return { t: kand[0], doppelt: kand.length > 1 ? kand : null };
+}
+function tagesBeginn(tz, ms) {
+  const w = wand(tz, ms);
+  const a = ortszeit(tz, w.y, w.mo, w.d, 0, 0).t;
+  const n = new Date(Date.UTC(w.y, w.mo - 1, w.d + 1));
+  const b = ortszeit(tz, n.getUTCFullYear(), n.getUTCMonth() + 1, n.getUTCDate(), 0, 0).t;
+  return { start: a, stunden: Math.round((b - a) / STD) };
+}
+/* Nächster Versatzwechsel nach „ab“: in Wochenschritten suchen, dann minutengenau halbieren. */
+function naechsteUmstellung(tz, ab, maxWochen = 60) {
+  let a = Math.floor(ab / MIN) * MIN;
+  const o0 = versatz(tz, a);
+  for (let i = 0; i < maxWochen; i++) {
+    const b = a + 7 * TAG;
+    if (versatz(tz, b) !== o0) {
+      let lo = a, hi = b;
+      while (hi - lo > MIN) {
+        const m = Math.floor((lo + hi) / 2 / MIN) * MIN;
+        if (versatz(tz, m) === o0) lo = m; else hi = m;
+      }
+      return { t: hi, von: o0, nach: versatz(tz, hi) };
+    }
+    a = b;
+  }
+  return null;
+}
+
+/* ===================== Zustand ===================== */
+const S = {
+  zonen: ['UTC', 'Europe/Berlin'],
+  t: Date.now(),
+  live: true,
+  h12: false,
+  lang: 'de',
+  doppelt: null // { tz, kand: [t1, t2] }
+};
+const L = () => T[S.lang];
+function speichern(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function laden(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+/* ===================== Formatieren ===================== */
+const pad = n => String(n).padStart(2, '0');
+function hm(w) {
+  if (!S.h12) return pad(w.h) + ':' + pad(w.mi);
+  const h = w.h % 12 || 12;
+  return h + ':' + pad(w.mi) + (w.h < 12 ? ' am' : ' pm');
+}
+const LOCALE = { de: 'de-DE', en: 'en-GB', es: 'es-ES', fr: 'fr-FR', it: 'it-IT', nl: 'nl-NL', pl: 'pl-PL', pt: 'pt-BR', tr: 'tr-TR', ru: 'ru-RU', hi: 'hi-IN', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR' };
+function locale() { return LOCALE[S.lang] || 'en-GB'; }
+const dFmtCache = new Map();
+function datumText(tz, ms, mitJahr) {
+  const k = S.lang + tz + (mitJahr ? 'j' : '');
+  let f = dFmtCache.get(k);
+  if (!f) { f = new Intl.DateTimeFormat(locale(), Object.assign({ timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' }, mitJahr ? { year: 'numeric' } : {})); dFmtCache.set(k, f); }
+  return f.format(ms);
+}
+function langDatum(tz, ms) {
+  return new Intl.DateTimeFormat(locale(), { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(ms);
+}
+function kuerzel(tz, ms) {
+  if (tz === 'UTC') return 'UTC';
+  try {
+    const p = new Intl.DateTimeFormat(locale(), { timeZone: tz, timeZoneName: 'short' }).formatToParts(ms).find(x => x.type === 'timeZoneName');
+    const v = p ? p.value : '';
+    if (/^(GMT|UTC)([+\-−]|$)/.test(v)) return '';
+    return v;
+  } catch (e) { return ''; }
+}
+function versatzText(min) {
+  if (min === 0) return 'UTC±0';
+  const s = min < 0 ? '−' : '+', a = Math.abs(min);
+  return 'UTC' + s + Math.floor(a / 60) + (a % 60 ? ':' + pad(a % 60) : '');
+}
+function diffText(min) {
+  if (min === 0) return L().gleich;
+  const s = min < 0 ? '−' : '+', a = Math.abs(min);
+  return s + Math.floor(a / 60) + (a % 60 ? ':' + pad(a % 60) : '') + ' ' + L().std;
+}
+function abstandText(min) {
+  const a = Math.abs(min);
+  return Math.floor(a / 60) + (a % 60 ? ':' + pad(a % 60) : '') + ' ' + L().std;
+}
+function ortName(tz) {
+  const o = ORT_BY_ID.get(tz);
+  if (o) {
+    if (S.lang === 'de') return o[1];
+    const n = NAMEN[S.lang] && NAMEN[S.lang][tz];
+    return n || o[2];
+  }
+  return tz.split('/').pop().replace(/_/g, ' ');
+}
+let landFmt = null, landFmtLang = '';
+function ortLand(tz) {
+  if (tz === 'UTC') return L().utcName;
+  const o = ORT_BY_ID.get(tz);
+  if (o && S.lang === 'de') return o[3];
+  if (o && S.lang === 'en') return o[4];
+  const code = REGION[tz];
+  if (code) {
+    try {
+      if (landFmtLang !== S.lang) { landFmt = new Intl.DisplayNames([locale()], { type: 'region' }); landFmtLang = S.lang; }
+      return landFmt.of(code);
+    } catch (e) { if (o) return o[4]; }
+  }
+  return tz.split('/')[0].replace(/_/g, ' ');
+}
+
+/* ===================== DOM-Hilfen ===================== */
+const $ = id => document.getElementById(id);
+function el(tag, attrs, ...kinder) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kinder) if (k !== null && k !== undefined) e.append(k);
+  return e;
+}
+const ICON = {
+  hoch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg>',
+  weg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>'
+};
+let toastUhr = null;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('an');
+  clearTimeout(toastUhr); toastUhr = setTimeout(() => t.classList.remove('an'), 2400);
+}
+function meldung(text, knopf) {
+  const m = $('meldung'); m.textContent = text || '';
+  if (knopf) m.append(el('button', { class: 'knopf', type: 'button', text: knopf.text, onclick: knopf.tun }));
+}
+
+/* ===================== Brett ===================== */
+let leistenSchluessel = '';
+function baueBrett() {
+  const b = $('brett'); b.textContent = '';
+  S.zonen.forEach((tz, i) => {
+    const name = ortName(tz);
+    const zeit = el('input', { class: 'zeit' + (S.h12 ? ' h12' : ''), type: 'text', inputmode: 'text', 'aria-label': L().zeitIn(name), 'data-i': i, autocomplete: 'off', spellcheck: 'false' });
+    zeit.addEventListener('change', () => zeitEingabe(i, zeit.value));
+    zeit.addEventListener('keydown', e => { if (e.key === 'Enter') { zeit.blur(); } if (e.key === 'Escape') { zeit.value = zeit.dataset.alt || ''; zeit.blur(); } });
+    zeit.addEventListener('focus', () => { zeit.dataset.alt = zeit.value; zeit.select(); });
+    const werk = el('div', { class: 'werkzeug' });
+    if (i > 0) { const h = el('button', { class: 'mini', type: 'button', title: L().nachOben, 'aria-label': L().nachOben + ': ' + name, onclick: () => nachOben(i) }); h.innerHTML = ICON.hoch; werk.append(h); }
+    if (S.zonen.length > 1) { const w = el('button', { class: 'mini', type: 'button', title: L().entfernen, 'aria-label': L().entfernen + ': ' + name, onclick: () => entfernen(i) }); w.innerHTML = ICON.weg; werk.append(w); }
+    const karte = el('div', { class: 'karte' + (i === 0 ? ' ref' : ''), 'data-tz': tz },
+      el('div', { class: 'info' },
+        el('div', { class: 'ort', title: tz }, name, istEigene(tz) ? el('span', { class: 'du', text: L().deine }) : null),
+        werk,
+        el('div', { class: 'unter' }),
+        el('div', { class: 'uhr' }, zeit, el('span', { class: 'sek', 'aria-hidden': 'true' }), el('span', { class: 'datum' }))
+      ),
+      el('div', { class: 'leiste-z' },
+        el('div', { class: 'stunden', 'aria-hidden': 'true' }),
+        el('div', { class: 'zeiger' })
+      )
+    );
+    const st = karte.querySelector('.stunden');
+    st.addEventListener('pointerdown', e => leisteZiehen(e, st));
+    b.append(karte);
+  });
+  leistenSchluessel = '';
+  $('meine').hidden = !EIGENE || S.zonen.some(istEigene) || S.zonen.length >= 12;
+  aktualisiere();
+}
+function leisteZiehen(e, st) {
+  if (e.button !== undefined && e.button !== 0) return;
+  const tb = tagesBeginn(S.zonen[0], S.t);
+  const setze = ev => {
+    const r = st.getBoundingClientRect();
+    const f = Math.min(Math.max((ev.clientX - r.left) / r.width, 0), 0.99999);
+    const min = Math.round(f * tb.stunden * 60 / 15) * 15;
+    setzeZeit(tb.start + Math.min(min, tb.stunden * 60 - 15) * MIN);
+  };
+  setze(e);
+  st.setPointerCapture(e.pointerId);
+  const mv = ev => setze(ev);
+  const up = () => { st.removeEventListener('pointermove', mv); st.removeEventListener('pointerup', up); st.removeEventListener('pointercancel', up); };
+  st.addEventListener('pointermove', mv); st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+}
+function stundenKlasse(h) {
+  if (h >= 9 && h < 17) return 'w';
+  if (h >= 8 && h < 18) return 't';
+  if (h >= 6 && h < 22) return 'd';
+  return 'n';
+}
+function baueLeisten(tb) {
+  const karten = $('brett').children;
+  const tagFmt = new Intl.DateTimeFormat(locale(), { weekday: 'short' });
+  S.zonen.forEach((tz, i) => {
+    const st = karten[i].querySelector('.stunden'); st.textContent = '';
+    let vorTag = null;
+    for (let k = 0; k < tb.stunden; k++) {
+      const t = tb.start + k * STD, w = wand(tz, t);
+      const tagKey = w.y * 10000 + w.mo * 100 + w.d;
+      const lab = S.h12 ? ((w.h % 12 || 12) + (w.h < 12 ? 'a' : 'p')) : String(w.h);
+      const zelle = el('div', { class: 'std ' + stundenKlasse(w.h) + (k % 2 ? ' ungerade' : '') });
+      const sp = el('span', { text: lab });
+      if (w.mi) sp.append(el('small', { text: pad(w.mi) }));
+      zelle.append(sp);
+      if (vorTag !== null && tagKey !== vorTag) {
+        zelle.classList.add('neu');
+        if (k >= tb.stunden - 2) zelle.classList.add('ende');
+        zelle.dataset.tag = tagFmt.format(Date.UTC(w.y, w.mo - 1, w.d, 12)).replace('.', '');
+        zelle.title = L().neuerTag;
+      }
+      vorTag = tagKey;
+      st.append(zelle);
+    }
+  });
+}
+
+function aktualisiere() {
+  if (S.live) S.t = Date.now();
+  const t = S.t, ref = S.zonen[0];
+  const tb = tagesBeginn(ref, t);
+  const key = [S.zonen.join(','), tb.start, tb.stunden, S.h12, S.lang].join('|');
+  if (key !== leistenSchluessel) { baueLeisten(tb); leistenSchluessel = key; baueTabelle(tb); }
+  const jahrJetzt = new Date().getFullYear();
+  const off0 = versatz(ref, t), w0 = wand(ref, t);
+  const karten = $('brett').children;
+  S.zonen.forEach((tz, i) => {
+    const k = karten[i]; if (!k) return;
+    const w = wand(tz, t), off = versatz(tz, t);
+    const zeit = k.querySelector('.zeit');
+    if (document.activeElement !== zeit) zeit.value = hm(w);
+    k.querySelector('.sek').textContent = S.live ? ':' + pad(w.s) : '';
+    const dat = k.querySelector('.datum');
+    dat.textContent = datumText(tz, t, w.y !== jahrJetzt);
+    dat.classList.toggle('anders', i > 0 && (w.y !== w0.y || w.mo !== w0.mo || w.d !== w0.d));
+    const u = k.querySelector('.unter'); u.textContent = '';
+    const kz = kuerzel(tz, t);
+    if (kz && kz !== 'UTC') u.append(el('span', { class: 'kz', text: kz }), ' · ');
+    u.append(tz === 'UTC' ? L().utcName : versatzText(off));
+    if (i > 0) u.append(' · ', el('span', { class: 'diff', text: diffText(off - off0) }));
+    else if (tz !== 'UTC') u.append(' · ' + ortLand(tz));
+    const f = (t - tb.start) / (tb.stunden * STD);
+    k.querySelector('.zeiger').style.left = (Math.min(Math.max(f, 0), 1) * 100) + '%';
+  });
+  const r = $('regler');
+  r.max = tb.stunden * 60 - 1;
+  if (document.activeElement !== r) r.value = Math.round((t - tb.start) / MIN);
+  r.setAttribute('aria-valuetext', S.zonen.map(z => hm(wand(z, t)) + ' ' + ortName(z)).join(', '));
+  const dIn = $('datum');
+  if (document.activeElement !== dIn) dIn.value = w0.y + '-' + pad(w0.mo) + '-' + pad(w0.d);
+  $('jetzt').setAttribute('aria-pressed', String(S.live));
+  $('jetzt').classList.toggle('zurueck', !S.live);
+  satz(t);
+  markiereTabelle(t);
+  hashSchreiben();
+}
+
+let letzterSatz = '';
+function satz(t) {
+  const z = S.zonen, a = z[0], b = z[1];
+  $('titel').textContent = b ? L().titelZwei(ortName(a), ortName(b)) : L().titelEins(ortName(a));
+  const p = $('satz');
+  // „14:00 UTC ist 15:00 MEZ in Berlin“, „02:30 MESZ in Berlin ist 00:30 UTC“, „09:00 in New York ist …“
+  const teil = (tz) => {
+    const w = wand(tz, t), kz = tz === 'UTC' ? 'UTC' : kuerzel(tz, t);
+    return { zeit: hm(w), kz: kz && (tz === 'UTC' || kz !== ortName(tz)) ? kz : '', ort: tz === 'UTC' ? '' : ortName(tz) };
+  };
+  const A = teil(a), B = b ? teil(b) : null;
+  const sig = JSON.stringify([A, B, S.lang]);
+  if (sig === letzterSatz) return;
+  letzterSatz = sig;
+  p.textContent = '';
+  // Satzbau je Sprache: satzM verbindet [A] und [B], teilM ordnet [zeit] [kz] [ort].
+  const haenge = X => {
+    const muster = X.ort ? L().teilM : '[zeit] [kz]';
+    muster.split(/(\[zeit\]|\[kz\]|\[ort\])/).forEach(s => {
+      if (s === '[zeit]') p.append(el('b', { text: X.zeit }));
+      else if (s === '[kz]') { if (X.kz) p.append(el('span', { class: 'zz', text: X.kz })); }
+      else if (s === '[ort]') p.append(X.ort);
+      else if (s) p.append(s);
+    });
+  };
+  L().satzM.split(/(\[A\]|\[B\])/).forEach(s => {
+    if (s === '[A]') haenge(A);
+    else if (s === '[B]') { if (B) haenge(B); }
+    else if (s && B) p.append(s);
+  });
+  p.normalize();
+  // Doppelte oder hängende Leerzeichen, wenn ein Kürzel fehlt
+  p.childNodes.forEach(n => { if (n.nodeType === 3) n.textContent = n.textContent.replace(/\s{2,}/g, ' '); });
+  if (p.firstChild && p.firstChild.nodeType === 3) p.firstChild.textContent = p.firstChild.textContent.replace(/^\s+/, '');
+  if (p.lastChild && p.lastChild.nodeType === 3) p.lastChild.textContent = p.lastChild.textContent.replace(/\s+$/, '');
+  document.title = 'Hourbridge · ' + (B ? ortName(a) + ' ↔ ' + ortName(b) : ortName(a));
+}
+
+/* ===================== Tabelle ===================== */
+function baueTabelle(tb) {
+  const tab = $('tabelle'); tab.textContent = '';
+  const kopf = el('tr');
+  S.zonen.forEach(tz => { const kz = kuerzel(tz, tb.start + 12 * STD); kopf.append(el('th', { scope: 'col', text: ortName(tz) + (kz && kz !== 'UTC' ? ' (' + kz + ')' : '') })); });
+  tab.append(el('thead', null, kopf));
+  const body = el('tbody');
+  const ref = S.zonen[0], wRef0 = wand(ref, tb.start);
+  for (let k = 0; k < tb.stunden; k++) {
+    const t = tb.start + k * STD;
+    const tr = el('tr', { 'data-t': t, onclick: () => setzeZeit(t) });
+    S.zonen.forEach(tz => {
+      const w = wand(tz, t);
+      const td = el('td', { text: hm(w) });
+      const tagDiff = Math.round((Date.UTC(w.y, w.mo - 1, w.d) - Date.UTC(wRef0.y, wRef0.mo - 1, wRef0.d)) / TAG);
+      if (tagDiff) td.append(el('span', { class: 'tag', text: (tagDiff > 0 ? '+' : '−') + Math.abs(tagDiff) + ' ' + L().tagK }));
+      tr.append(td);
+    });
+    body.append(tr);
+  }
+  tab.append(body);
+}
+function markiereTabelle(t) {
+  const rows = $('tabelle').querySelectorAll('tbody tr');
+  rows.forEach(r => { const s = +r.dataset.t; r.classList.toggle('akt', t >= s && t < s + STD); });
+}
+
+/* ===================== Zeitumstellungen ===================== */
+let umstSchluessel = '';
+function baueUmstellungen() {
+  const heute = Math.floor(Date.now() / TAG);
+  const key = S.zonen.join(',') + '|' + S.lang + '|' + heute + '|' + S.h12;
+  if (key === umstSchluessel) return;
+  umstSchluessel = key;
+  const ul = $('umst'); ul.textContent = '';
+  const jetzt = Date.now();
+  const gesehen = new Set();
+  const regeln = new Map();
+  S.zonen.forEach(tz => {
+    const n = naechsteUmstellung(tz, jetzt);
+    const sig = n ? n.t + ':' + n.von + ':' + n.nach : 'x' + versatz(tz, jetzt);
+    regeln.set(tz, n);
+    if (gesehen.has(tz)) return; gesehen.add(tz);
+    if (!n) { ul.append(el('li', { class: 'keine', text: L().keineUmst(ortName(tz)) })); return; }
+    const vorher = wand(tz, n.t - MIN), nachher = wand(tz, n.t);
+    const vorZeit = hm({ h: (vorher.mi === 59 ? (vorher.h + 1) % 24 : vorher.h), mi: (vorher.mi + 1) % 60 });
+    const tage = Math.round((Math.floor((n.t + versatz(tz, n.t) * MIN) / TAG)) - Math.floor((jetzt + versatz(tz, jetzt) * MIN) / TAG));
+    const kzA = kuerzel(tz, n.t - MIN), kzB = kuerzel(tz, n.t);
+    ul.append(el('li', null,
+      el('div', { class: 'wann' }, el('b', { text: ortName(tz) + ': ' }), langDatum(tz, n.t)),
+      el('div', { class: 'klein', text: `${vorZeit} → ${hm(nachher)} · ${n.nach > n.von ? L().vor : L().zurueck} · ${kzA && kzB ? kzA + ' → ' + kzB + ' · ' : ''}${versatzText(n.von)} → ${versatzText(n.nach)} · ${L().inTagen(tage)}` })
+    ));
+  });
+  // Kurze Sonderzeiten: zwei Orte stellen an verschiedenen Tagen um (USA und EU im März und
+  // Oktober/November). Dann stimmt der gewohnte Abstand ein paar Wochen lang nicht.
+  const ach = $('achtungen'); ach.textContent = '';
+  const ab = jetzt - 60 * TAG, bisMax = jetzt + 370 * TAG;
+  const wechselCache = new Map();
+  const wechsel = tz => {
+    if (wechselCache.has(tz)) return wechselCache.get(tz);
+    const out = []; let a = ab;
+    for (let i = 0; i < 6; i++) { const n = naechsteUmstellung(tz, a); if (!n || n.t > bisMax) break; out.push(n.t); a = n.t + MIN; }
+    wechselCache.set(tz, out); return out;
+  };
+  const kurzDatum = (tz, t) => new Intl.DateTimeFormat(locale(), { timeZone: tz, day: 'numeric', month: 'long', year: 'numeric' }).format(t);
+  const z = [...new Set(S.zonen)];
+  let gezeigt = 0;
+  for (let i = 0; i < z.length && gezeigt < 4; i++) for (let j = i + 1; j < z.length && gezeigt < 4; j++) {
+    const a = z[i], b = z[j];
+    const pts = [...new Set([...wechsel(a), ...wechsel(b)])].sort((x, y) => x - y);
+    if (pts.length < 2) continue;
+    const abst = t => versatz(b, t) - versatz(a, t);
+    const seg = []; let cur = abst(ab), start = ab;
+    for (const p of pts) { const neu = abst(p); if (neu !== cur) { seg.push([start, p, cur]); cur = neu; start = p; } }
+    seg.push([start, Infinity, cur]);
+    for (let k = 1; k < seg.length - 1 && gezeigt < 4; k++) {
+      const [s0, s1, wert] = seg[k];
+      if (s1 <= jetzt || s1 - s0 > 60 * TAG || seg[k - 1][2] !== seg[k + 1][2]) continue;
+      ach.append(el('div', { class: 'achtung', text: L().abstand(ortName(a), ortName(b), kurzDatum(a, Math.max(s0, jetzt)), kurzDatum(a, s1 - MIN), abstandText(seg[k - 1][2]), abstandText(wert)) }));
+      gezeigt++;
+    }
+  }
+}
+function baueFakten() {
+  const dl = $('fakten'); dl.textContent = '';
+  L().fakten.forEach(([a, b]) => dl.append(el('dt', { text: a }), el('dd', { text: b })));
+}
+
+/* ===================== Eingaben ===================== */
+function parseZeit(s) {
+  s = s.trim().toLowerCase().replace(/\s+/g, ' ');
+  let m = s.match(/^(\d{1,2})(?:[:.h ]?(\d{2}))?\s*(am|pm|a|p|uhr|h)?$/);
+  if (!m) return null;
+  let h = +m[1], mi = m[2] ? +m[2] : 0;
+  const ap = m[3];
+  if (ap && ap[0] === 'p' && h < 12) h += 12;
+  if (ap && ap[0] === 'a' && h === 12) h = 0;
+  if (h === 24 && mi === 0) h = 0;
+  if (h > 23 || mi > 59) return null;
+  return { h, mi };
+}
+function setzeZeit(t, opts) {
+  S.live = false; S.t = t;
+  if (!opts || !opts.behalteMeldung) { S.doppelt = null; meldung(''); }
+  aktualisiere();
+}
+function zeitEingabe(i, text) {
+  const tz = S.zonen[i], p = parseZeit(text);
+  if (!p) { aktualisiere(); return; }
+  setzeOrtszeit(tz, p.h, p.mi);
+}
+function setzeOrtszeit(tz, h, mi, tagW) {
+  const w = tagW || wand(tz, S.t);
+  const r = ortszeit(tz, w.y, w.mo, w.d, h, mi);
+  setzeZeit(r.t);
+  const z = hm({ h, mi }), o = ortName(tz);
+  if (r.luecke) meldung(L().luecke(z, o, hm(wand(tz, r.t))));
+  else if (r.doppelt) zeigeDoppelt(tz, z, r.doppelt, 0);
+}
+function zeigeDoppelt(tz, z, kand, idx) {
+  const o = ortName(tz);
+  meldung(L().doppelt(z, o) + ' (' + kuerzel(tz, kand[idx]) + ')', {
+    text: idx === 0 ? L().zweite : L().erste,
+    tun: () => { setzeZeit(kand[1 - idx], { behalteMeldung: true }); zeigeDoppelt(tz, z, kand, 1 - idx); }
+  });
+}
+function nachOben(i) { const z = S.zonen.splice(i, 1)[0]; S.zonen.unshift(z); zonenGeaendert(); }
+function entfernen(i) { if (S.zonen.length < 2) return; S.zonen.splice(i, 1); zonenGeaendert(); }
+function hinzufuegen(tz, still) {
+  if (S.zonen.includes(tz)) { if (!still) toast(L().schonDa); return false; }
+  S.zonen.push(tz); zonenGeaendert(); if (!still) toast(L().hinzu(ortName(tz))); return true;
+}
+function zonenGeaendert() { if (S.merken) speichern('hourbridge.zonen', S.zonen.join(',')); umstSchluessel = ''; baueBrett(); baueUmstellungen(); }
+
+/* ===================== Suche ===================== */
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[_/]/g, ' ').trim();
+/* Suchindex erst beim ersten Suchen bauen. Browser nennen manche Zonen verschieden
+   (Europe/Kiev und Europe/Kyiv, Asia/Calcutta und Asia/Kolkata): Doppelte fallen weg. */
+let INDEX = null;
+function index() {
+  if (INDEX) return INDEX;
+  const m = new Map(), kanon = z => { try { return new Intl.DateTimeFormat('en', { timeZone: z }).resolvedOptions().timeZone; } catch (e) { return null; } };
+  const bekannt = new Set();
+  ORTE.forEach(o => {
+    if (!gueltig(o[0])) return;
+    const fremd = Object.values(NAMEN).map(n => n[o[0]] || '').join(' ');
+    m.set(o[0], norm([o[0], o[1], o[2], o[3], o[4], o[5], fremd, ortLand(o[0])].join(' ')));
+    bekannt.add(kanon(o[0]));
+  });
+  ALLE_ZONEN.forEach(z => { if (m.has(z) || bekannt.has(kanon(z))) return; m.set(z, norm(z)); });
+  return (INDEX = m);
+}
+function finde(q, max = 8) {
+  q = norm(q); if (!q) return [];
+  const INDEX = index();
+  const worte = q.split(' ').filter(Boolean);
+  const treffer = [];
+  for (const [tz, txt] of INDEX) {
+    if (!worte.every(w => txt.includes(w))) continue;
+    const o = ORT_BY_ID.get(tz);
+    let score = 0;
+    const namen = o ? [o[1], o[2], ...Object.values(NAMEN).map(n => n[tz]).filter(Boolean)].map(norm) : [norm(tz.split('/').pop())];
+    if (namen.some(n => n === q)) score += 100;
+    else if (namen.some(n => n.startsWith(q))) score += 50;
+    if (o && (' ' + norm(o[5]) + ' ').includes(' ' + q + ' ')) score += 80;
+    if (o) score += 10;
+    treffer.push([score, tz]);
+  }
+  treffer.sort((a, b) => b[0] - a[0] || a[1].localeCompare(b[1]));
+  return treffer.slice(0, max).map(x => x[1]);
+}
+/* „9am New York“, „14:00 utc“, „15 uhr tokio“, nur „Tokio“ oder nur „14:30“ */
+function zerlege(s) {
+  const t = s.trim();
+  let m = t.match(/^(\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm|a|p|uhr|h)?)(?:\s+(?:in\s+)?(.+))?$/i);
+  if (m && parseZeit(m[1])) return { zeit: parseZeit(m[1]), ort: (m[2] || '').trim() };
+  m = t.match(/^(.+?)\s+(\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm|a|p|uhr|h)?)$/i);
+  if (m && parseZeit(m[2])) return { zeit: parseZeit(m[2]), ort: m[1].replace(/\s+(um|at)$/i, '').trim() };
+  return { zeit: null, ort: t };
+}
+let vorschlagIdx = -1, vorschlagListe = [];
+function zeigeVorschlaege() {
+  const inp = $('suchfeld'), ul = $('vorschlaege');
+  const { zeit, ort } = zerlege(inp.value);
+  vorschlagListe = ort ? finde(ort) : [];
+  ul.textContent = '';
+  vorschlagIdx = vorschlagListe.length ? 0 : -1;
+  vorschlagListe.forEach((tz, k) => {
+    const li = el('li', { role: 'option', id: 'vs' + k, 'aria-selected': String(k === vorschlagIdx) },
+      el('div', null, el('div', { class: 'n1', text: ortName(tz) }), el('div', { class: 'n2', text: ortLand(tz) + ' · ' + versatzText(versatz(tz, S.t)) })),
+      el('div', { class: 'z', text: zeit ? hm(zeit) : hm(wand(tz, S.t)) })
+    );
+    li.addEventListener('mousedown', e => { e.preventDefault(); waehle(k); });
+    ul.append(li);
+  });
+  const offen = vorschlagListe.length > 0;
+  ul.hidden = !offen;
+  inp.setAttribute('aria-expanded', String(offen));
+  if (offen) inp.setAttribute('aria-activedescendant', 'vs0'); else inp.removeAttribute('aria-activedescendant');
+}
+function markiereVorschlag() {
+  [...$('vorschlaege').children].forEach((li, k) => li.setAttribute('aria-selected', String(k === vorschlagIdx)));
+  if (vorschlagIdx >= 0) { $('suchfeld').setAttribute('aria-activedescendant', 'vs' + vorschlagIdx); $('vs' + vorschlagIdx).scrollIntoView({ block: 'nearest' }); }
+}
+function schliesseVorschlaege() { $('vorschlaege').hidden = true; $('suchfeld').setAttribute('aria-expanded', 'false'); $('suchfeld').removeAttribute('aria-activedescendant'); }
+function waehle(k) {
+  const inp = $('suchfeld');
+  const { zeit, ort } = zerlege(inp.value);
+  let tz = k >= 0 ? vorschlagListe[k] : null;
+  if (!tz && ort) { toast(L().nichtGefunden); return; }
+  if (!tz) tz = S.zonen[0];
+  if (!S.zonen.includes(tz)) hinzufuegen(tz, !!zeit);
+  if (zeit) {
+    // Im Jetzt-Betrieb meint „9am New York“ das nächste 9 Uhr dort, nicht ein schon vergangenes.
+    let tag = null;
+    if (S.live) {
+      const jetzt = Date.now(), w = wand(tz, jetzt);
+      if (ortszeit(tz, w.y, w.mo, w.d, zeit.h, zeit.mi).t < jetzt - MIN) {
+        const n = new Date(Date.UTC(w.y, w.mo - 1, w.d + 1));
+        tag = { y: n.getUTCFullYear(), mo: n.getUTCMonth() + 1, d: n.getUTCDate() };
+      }
+    }
+    setzeOrtszeit(tz, zeit.h, zeit.mi, tag);
+  }
+  inp.value = ''; schliesseVorschlaege();
+}
+
+/* ===================== Teilen ===================== */
+function zeitStempel(t) { const d = new Date(t); return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + 'Z'; }
+function hashBauen() {
+  // Zonennamen bestehen nur aus Buchstaben, _, -, + und /; die dürfen im Anker roh stehen.
+  const p = ['z=' + S.zonen.join(',')];
+  if (!S.live) p.push('t=' + zeitStempel(S.t));
+  return '#' + p.join('&');
+}
+let hashAlt = '';
+function hashSchreiben() {
+  const h = hashBauen();
+  if (h !== hashAlt) { hashAlt = h; try { history.replaceState(null, '', h); } catch (e) {} }
+}
+function hashLesen() {
+  const h = location.hash.slice(1); if (!h) return false;
+  const p = new URLSearchParams(h.replace(/\+/g, '%2B'));
+  const z = (p.get('z') || '').split(',').map(x => x.trim()).filter(x => x && gueltig(x));
+  if (!z.length) return false;
+  S.zonen = [...new Set(z)].slice(0, 12);
+  const t = p.get('t');
+  const m = t && t.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})Z$/);
+  if (m) { S.t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]); S.live = false; } else S.live = true;
+  return true;
+}
+async function kopiere(text) {
+  try { await navigator.clipboard.writeText(text); toast(L().kopiert); }
+  catch (e) {
+    const ta = el('textarea', { style: 'position:fixed;opacity:0' }); ta.value = text; document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (x) {}
+    ta.remove(); toast(ok ? L().kopiert : L().kopierFehler);
+  }
+}
+function zeitenText() {
+  const t = S.t;
+  return S.zonen.map(tz => {
+    const kz = kuerzel(tz, t);
+    return `${hm(wand(tz, t))} ${kz && kz !== ortName(tz) ? kz + ' ' : ''}${ortName(tz)} (${datumText(tz, t, true)})`;
+  }).join('\n');
+}
+function ics() {
+  const t = S.t, esc = s => s.replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\n/g, '\\n');
+  const zeilen = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Hourbridge//DE', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
+    'UID:' + t + '-' + Math.random().toString(36).slice(2) + '@hourbridge',
+    'DTSTAMP:' + zeitStempel(Date.now()).replace('Z', '00Z'),
+    'DTSTART:' + zeitStempel(t).replace('Z', '00Z'),
+    'DTEND:' + zeitStempel(t + STD).replace('Z', '00Z'),
+    'SUMMARY:' + esc(L().termin),
+    'DESCRIPTION:' + esc(zeitenText()),
+    'END:VEVENT', 'END:VCALENDAR'
+  ];
+  const blob = new Blob([zeilen.join('\r\n') + '\r\n'], { type: 'text/calendar;charset=utf-8' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: 'termin-' + zeitStempel(t) + '.ics' });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast(L().kalender);
+}
+
+/* ===================== Sprache und Darstellung ===================== */
+const DARST = ['system', 'light', 'dark', 'hc-dark', 'hc-light', 'cvd-dark', 'cvd-light', 'invert'];
+function setzeDarstellung(v, merken) {
+  const d = document.documentElement;
+  let ts = null, vs = null;
+  if (v === 'light' || v === 'dark') ts = v;
+  else if (v === 'hc-dark' || v === 'hc-light') { ts = v.slice(3); vs = 'contrast'; }
+  else if (v === 'cvd-dark' || v === 'cvd-light') { ts = v.slice(4); vs = 'cvd'; }
+  else if (v === 'invert') vs = 'invert';
+  else if (matchMedia('(prefers-contrast: more)').matches) { ts = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; vs = 'contrast'; }
+  if (ts) d.setAttribute('data-theme', ts); else d.removeAttribute('data-theme');
+  if (vs) d.setAttribute('data-vision', vs); else d.removeAttribute('data-vision');
+  if (merken) speichern('werkstatt.darstellung', v);
+  const hell = ts === 'light' || (!ts && matchMedia('(prefers-color-scheme: light)').matches && v !== 'invert');
+  document.querySelector('meta[name="theme-color"]').content = hell ? '#F1F0F6' : '#0E171F';
+}
+function setzeSprache(l, merken) {
+  S.lang = T[l] ? l : 'de';
+  if (merken) speichern('hourbridge.lang', S.lang);
+  document.documentElement.lang = S.lang;
+  $('sprache').value = S.lang;
+  document.querySelectorAll('[data-i]').forEach(e => { if (e.classList.contains('zeit')) return; const v = L()[e.dataset.i]; if (typeof v === 'string') e.textContent = v; });
+  $('suchfeld').placeholder = L().sucheP;
+  const ds = $('darstellung'), alt = ds.value || laden('werkstatt.darstellung') || 'system';
+  ds.textContent = '';
+  DARST.forEach((v, k) => ds.append(el('option', { value: v, text: L().darstOpt[k] })));
+  ds.value = DARST.includes(alt) ? alt : 'system';
+  $('format-t').textContent = S.h12 ? L().h12 : L().h24;
+  dFmtCache.clear(); letzterSatz = ''; umstSchluessel = '';
+  baueFakten(); baueBrett(); baueUmstellungen();
+}
+
+/* ===================== Installieren ===================== */
+function alsApp() { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+function zeigeInstall() { $('installieren').hidden = !(window.zuInstall && !alsApp()); }
+window.zuInstallZeigen = zeigeInstall;
+$('installieren').addEventListener('click', async () => {
+  const e = window.zuInstall; window.zuInstall = null; zeigeInstall();
+  if (!e) return;
+  try { e.prompt(); await e.userChoice; } catch (x) {}
+});
+window.addEventListener('appinstalled', () => { window.zuInstall = null; zeigeInstall(); toast(L().installDone); });
+
+/* ===================== Verdrahten ===================== */
+$('jetzt').addEventListener('click', () => { S.live = true; S.doppelt = null; meldung(''); aktualisiere(); });
+$('datum').addEventListener('change', e => {
+  const m = e.target.value.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return;
+  const ref = S.zonen[0], w = wand(ref, S.t);
+  setzeOrtszeit(ref, w.h, w.mi, { y: +m[1], mo: +m[2], d: +m[3] });
+});
+$('tauschen').addEventListener('click', () => { S.zonen.reverse(); zonenGeaendert(); });
+$('format').addEventListener('click', () => {
+  S.h12 = !S.h12; speichern('hourbridge.h12', S.h12 ? '1' : '0');
+  $('format').setAttribute('aria-pressed', String(S.h12));
+  $('format-t').textContent = S.h12 ? L().h12 : L().h24;
+  letzterSatz = ''; umstSchluessel = ''; baueBrett(); baueUmstellungen();
+});
+$('regler').addEventListener('input', e => {
+  const tb = tagesBeginn(S.zonen[0], S.t);
+  setzeZeit(tb.start + (+e.target.value) * MIN);
+});
+$('link').addEventListener('click', () => kopiere(location.origin + location.pathname + hashBauen()));
+$('text').addEventListener('click', () => kopiere(zeitenText()));
+$('ics').addEventListener('click', ics);
+$('meine').addEventListener('click', () => { if (EIGENE) hinzufuegen(EIGENE); });
+/* Nichts wird ungefragt gespeichert: die Orte stehen im Link. Nur wer „merken“ einschaltet,
+   bekommt sie im Browser abgelegt; Ausschalten löscht sie wieder. */
+$('merken').addEventListener('change', e => {
+  S.merken = e.target.checked;
+  if (S.merken) { speichern('hourbridge.merken', '1'); speichern('hourbridge.zonen', S.zonen.join(',')); toast(L().gemerkt); }
+  else { try { localStorage.removeItem('hourbridge.merken'); localStorage.removeItem('hourbridge.zonen'); } catch (x) {} toast(L().vergessen); }
+});
+$('sprache').addEventListener('change', e => setzeSprache(e.target.value, true));
+$('darstellung').addEventListener('change', e => setzeDarstellung(e.target.value, true));
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => setzeDarstellung($('darstellung').value, false));
+matchMedia('(prefers-contrast: more)').addEventListener('change', () => setzeDarstellung($('darstellung').value, false));
+const such = $('suchfeld');
+such.addEventListener('input', zeigeVorschlaege);
+such.addEventListener('focus', () => { if (such.value) zeigeVorschlaege(); });
+such.addEventListener('blur', () => setTimeout(schliesseVorschlaege, 100));
+such.addEventListener('keydown', e => {
+  const n = vorschlagListe.length;
+  if (e.key === 'ArrowDown' && n) { e.preventDefault(); vorschlagIdx = (vorschlagIdx + 1) % n; markiereVorschlag(); }
+  else if (e.key === 'ArrowUp' && n) { e.preventDefault(); vorschlagIdx = (vorschlagIdx - 1 + n) % n; markiereVorschlag(); }
+  else if (e.key === 'Enter') { e.preventDefault(); waehle(vorschlagIdx); }
+  else if (e.key === 'Escape') { schliesseVorschlaege(); }
+});
+window.addEventListener('hashchange', () => { if (location.hash !== hashAlt && hashLesen()) { umstSchluessel = ''; baueBrett(); baueUmstellungen(); } });
+
+/* ===================== Start ===================== */
+(function start() {
+  let l = laden('hourbridge.lang');
+  if (!T[l]) { const c = (navigator.languages || [navigator.language || 'de']).map(x => String(x).toLowerCase().split('-')[0]); l = c.find(x => T[x]) || 'en'; }
+  const h = laden('hourbridge.h12');
+  if (h === '1' || h === '0') S.h12 = h === '1';
+  else { try { const hc = new Intl.DateTimeFormat(navigator.language, { hour: 'numeric' }).resolvedOptions(); S.h12 = hc.hour12 === true || hc.hourCycle === 'h12' || hc.hourCycle === 'h11'; } catch (e) {} }
+  $('format').setAttribute('aria-pressed', String(S.h12));
+  S.merken = laden('hourbridge.merken') === '1';
+  $('merken').checked = S.merken;
+  if (!hashLesen() && S.merken) {
+    const z = (laden('hourbridge.zonen') || '').split(',').filter(x => x && gueltig(x));
+    if (z.length) S.zonen = z;
+  }
+  setzeDarstellung(laden('werkstatt.darstellung') || 'system', false);
+  setzeSprache(l, false);
+  zeigeInstall();
+  // Jede Sekunde nur im Live-Betrieb, und nur solange die Seite sichtbar ist.
+  setInterval(() => { if (S.live && !document.hidden) aktualisiere(); }, 1000);
+  setInterval(() => { if (!document.hidden) baueUmstellungen(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.live) aktualisiere(); });
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('./sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
