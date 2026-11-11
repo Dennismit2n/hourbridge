@@ -392,6 +392,9 @@ details.spick {
 }
 /* Hoher Kontrast kennt keine Schatten, der Beschlag bleibt. Gedruckt wird ohne beides. */
 :root[data-vision="contrast"] :is(select, .knopf, .karte, .tafel, details.spick) { box-shadow: none; }
+@media print {
+  select, .knopf, .feld, .karte, .tafel, .achtung, details.spick, .suche input { background-image: none !important; box-shadow: none !important; }
+}
 /* Ende Beschlag */
 </style>
 </head>
