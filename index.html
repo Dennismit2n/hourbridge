@@ -396,6 +396,8 @@ details.spick {
 @media print {
   select, .knopf, .feld, .karte, .tafel, .achtung, details.spick, .suche input { background-image: none !important; box-shadow: none !important; }
 }
+/* Am Handy steht die Stundenleiste unten in der Karte: etwas Luft bis zur Rahmenlinie. */
+@media (max-width: 760px) { .karte { padding-bottom: 17px; } }
 /* Ende Beschlag */
 </style>
 </head>
