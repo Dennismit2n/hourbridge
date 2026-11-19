@@ -537,7 +537,7 @@ const T = {
   },
   en: {
     install: 'Install', installDone: 'Installed as an app.', sprache: 'Language', darst: 'Appearance',
-    darstOpt: ['System', 'Light', 'Dark', 'High contrast dark', 'High contrast light', 'Colour-blind dark', 'Colour-blind light', 'Inverted colours'],
+    darstOpt: ['System', 'Light', 'Dark', 'High contrast dark', 'High contrast light', 'Color-blind dark', 'Color-blind light', 'Inverted colors'],
     jetzt: 'Now', datum: 'Date', tauschen: 'Swap', regler: 'Drag, click or use arrow keys', reglerL: 'Move the time',
     sucheL: 'Add a place or type a time', sucheP: 'Add a place or type a time, e.g. “Tokyo” or “9am New York”',
     link: 'Copy link', text: 'Copy times', ics: 'Add to calendar', merken: 'Remember places on this device',
@@ -1098,8 +1098,8 @@ function hm(w) {
   const h = w.h % 12 || 12;
   return h + ':' + pad(w.mi) + (w.h < 12 ? ' am' : ' pm');
 }
-const LOCALE = { de: 'de-DE', en: 'en-GB', es: 'es-ES', fr: 'fr-FR', it: 'it-IT', nl: 'nl-NL', pl: 'pl-PL', pt: 'pt-BR', tr: 'tr-TR', ru: 'ru-RU', hi: 'hi-IN', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR' };
-function locale() { return LOCALE[S.lang] || 'en-GB'; }
+const LOCALE = { de: 'de-DE', en: 'en-US', es: 'es-ES', fr: 'fr-FR', it: 'it-IT', nl: 'nl-NL', pl: 'pl-PL', pt: 'pt-BR', tr: 'tr-TR', ru: 'ru-RU', hi: 'hi-IN', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR' };
+function locale() { return LOCALE[S.lang] || 'en-US'; }
 const dFmtCache = new Map();
 function datumText(tz, ms, mitJahr) {
   const k = S.lang + tz + (mitJahr ? 'j' : '');
